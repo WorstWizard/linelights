@@ -8,5 +8,6 @@ edition = "2021"
 [dependencies]
 ash = "0.37.3"
 glam = "0.24.1"
+tobj = "4.0.0"
 vk_engine = {git = "https://github.com/WorstWizard/vk_engine.git", features = ["shader_compilation"]}
 winit = "0.28.6"

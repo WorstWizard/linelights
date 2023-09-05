@@ -5,7 +5,23 @@ use vk_engine::*;
 use winit::event::{Event, VirtualKeyCode, WindowEvent};
 use winit::event_loop::ControlFlow;
 
+use tobj;
+
 static APP_NAME: &str = "Linelight Experiments";
+
+fn load_bunny() -> (Vec<Vec3>, Vec<u16>) {
+    let bunny = tobj::load_obj("bunny.obj", &tobj::GPU_LOAD_OPTIONS);
+    let (mut models, _) = bunny.expect("Failed to load model!");
+    let bunny_model = models.pop().unwrap();
+
+    let vertices: Vec<Vec3> = bunny_model.mesh.positions
+        .chunks_exact(3)
+        .map(|chunk| vec3(chunk[0], chunk[1], chunk[2]))
+        .collect();
+    let indices: Vec<u16> = bunny_model.mesh.indices.into_iter().map(|num| num as u16).collect();
+
+    (vertices, indices)
+}
 
 fn main() {
     println!("Compiling shaders...");
@@ -17,25 +33,29 @@ fn main() {
     ];
 
     println!("Loading model...");
+
+    let (verts, indices) = load_bunny();
+
     // Vertices of a cube
-    let verts = vec![
-        vec3(-0.5, -0.5, -0.5),
-        vec3(0.5, -0.5, -0.5),
-        vec3(-0.5, 0.5, -0.5),
-        vec3(0.5, 0.5, -0.5),
-        vec3(-0.5, -0.5, 0.5),
-        vec3(0.5, -0.5, 0.5),
-        vec3(-0.5, 0.5, 0.5),
-        vec3(0.5, 0.5, 0.5),
-    ];
-    let indices: Vec<u16> = vec![
-        0, 1, 2, 1, 3, 2, //front
-        5, 4, 6, 5, 6, 7, //back
-        4, 0, 6, 0, 2, 6, //left
-        1, 5, 3, 5, 7, 3, //right
-        4, 5, 0, 5, 1, 0, //top
-        2, 3, 6, 3, 7, 6, //bottom
-    ];
+    // let verts = vec![
+    //     vec3(-0.5, -0.5, -0.5),
+    //     vec3(0.5, -0.5, -0.5),
+    //     vec3(-0.5, 0.5, -0.5),
+    //     vec3(0.5, 0.5, -0.5),
+    //     vec3(-0.5, -0.5, 0.5),
+    //     vec3(0.5, -0.5, 0.5),
+    //     vec3(-0.5, 0.5, 0.5),
+    //     vec3(0.5, 0.5, 0.5),
+    // ];
+    // let indices: Vec<u16> = vec![
+    //     0, 1, 2, 1, 3, 2, //front
+    //     5, 4, 6, 5, 6, 7, //back
+    //     4, 0, 6, 0, 2, 6, //left
+    //     1, 5, 3, 5, 7, 3, //right
+    //     4, 5, 0, 5, 1, 0, //top
+    //     2, 3, 6, 3, 7, 6, //bottom
+    // ];
+
     let num_indices = indices.len() as u32;
     let vid = VertexInputDescriptors {
         attributes: vec![*vk::VertexInputAttributeDescription::builder()
@@ -74,7 +94,7 @@ fn main() {
     let mut timer = std::time::Instant::now();
     let mut theta = 0.0;
 
-    const ROT_P_SEC: f32 = 0.25;
+    const ROT_P_SEC: f32 = 0.05;
     const TWO_PI: f32 = 2.0*3.1415926535;
 
     event_loop.run(move |event, _, control_flow| {
@@ -104,15 +124,15 @@ fn main() {
                 app.reset_in_flight_fence(current_frame);
 
                 let eye = vec3(0.0, -1.0, 0.0);
-                let model_pos = vec3(0.0, 0.0, 2.0);
+                let model_pos = vec3(0.0, 1.0, 2.0);
                 let up = vec3(0.0, -1.0, 0.0);
                 let aspect_ratio =
                     app.swapchain_extent.width as f32 / app.swapchain_extent.height as f32;
 
                 theta = (theta + (ROT_P_SEC * TWO_PI) * timer.elapsed().as_secs_f32()) % TWO_PI;
 
-                let model = Mat4::from_rotation_translation(glam::Quat::from_rotation_y(theta), model_pos);
-                let view = Mat4::look_at_lh(eye, model_pos, up);
+                let model = Mat4::from_scale_rotation_translation(vec3(10.0, -10.0, 10.0), glam::Quat::from_rotation_y(theta), model_pos);
+                let view = Mat4::look_at_lh(eye, vec3(0.0, 0.0, 2.0), up);
                 let projection =
                     Mat4::perspective_infinite_lh(f32::to_radians(90.0), aspect_ratio, 0.01);
                 let mut correction_mat = Mat4::IDENTITY;

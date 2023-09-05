@@ -12,7 +12,7 @@ layout(binding = 0) uniform UBO {
 layout(location = 0) out vec3 fragColor;
 
 void main() {
-    float shadeVariance = gl_VertexIndex / 7.0; // Range 0.0 to 1.0
+    float shadeVariance = (gl_VertexIndex % 8) / 7.0; // Range 0.0 to 1.0
     fragColor = vec3(
         1.0,
         1.0 - shadeVariance,
