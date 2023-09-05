@@ -1,0 +1,12 @@
+[package]
+name = "linelights"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ash = "0.37.3"
+glam = "0.24.1"
+vk_engine = {git = "https://github.com/WorstWizard/vk_engine.git", features = ["shader_compilation"]}
+winit = "0.28.6"
