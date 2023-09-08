@@ -124,14 +124,15 @@ fn main() {
                 app.reset_in_flight_fence(current_frame);
 
                 let eye = vec3(0.0, -1.0, 0.0);
-                let model_pos = vec3(0.0, 1.0, 2.0);
+                let model_pos = vec3(0.0, 1.5, 2.0);
                 let up = vec3(0.0, -1.0, 0.0);
                 let aspect_ratio =
                     app.swapchain_extent.width as f32 / app.swapchain_extent.height as f32;
+                let model_scale = 15.0;
 
                 theta = (theta + (ROT_P_SEC * TWO_PI) * timer.elapsed().as_secs_f32()) % TWO_PI;
 
-                let model = Mat4::from_scale_rotation_translation(vec3(10.0, -10.0, 10.0), glam::Quat::from_rotation_y(theta), model_pos);
+                let model = Mat4::from_scale_rotation_translation(vec3(model_scale, -model_scale, model_scale), glam::Quat::from_rotation_y(theta), model_pos);
                 let view = Mat4::look_at_lh(eye, vec3(0.0, 0.0, 2.0), up);
                 let projection =
                     Mat4::perspective_infinite_lh(f32::to_radians(90.0), aspect_ratio, 0.01);
