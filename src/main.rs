@@ -1,3 +1,5 @@
+use std::mem::MaybeUninit;
+
 use ash::vk;
 use glam::{vec3, Mat4, Vec3};
 use vk_engine::engine_core::write_struct_to_buffer;
@@ -5,25 +7,52 @@ use vk_engine::*;
 use winit::event::{Event, VirtualKeyCode, WindowEvent};
 use winit::event_loop::ControlFlow;
 
-use tobj;
+use tobj::{self, Model};
 
 static APP_NAME: &str = "Linelight Experiments";
+
+fn unflatten_positions(positions: Vec<f32>) -> Vec<Vec3> {
+    positions.chunks_exact(3).map(|chunk| vec3(chunk[0],chunk[1],chunk[2])).collect()
+}
+fn indices_to_u16(indices: Vec<u32>) -> Vec<u16> {
+    indices.into_iter().map(|num| num as u16).collect()
+}
 
 fn load_bunny() -> (Vec<Vec3>, Vec<u16>) {
     let bunny = tobj::load_obj("bunny.obj", &tobj::GPU_LOAD_OPTIONS);
     let (mut models, _) = bunny.expect("Failed to load model!");
     let bunny_model = models.pop().unwrap();
 
-    let vertices: Vec<Vec3> = bunny_model.mesh.positions
-        .chunks_exact(3)
-        .map(|chunk| vec3(chunk[0], chunk[1], chunk[2]))
-        .collect();
-    let indices: Vec<u16> = bunny_model.mesh.indices.into_iter().map(|num| num as u16).collect();
+    let vertices = unflatten_positions(bunny_model.mesh.positions);
+    let indices = indices_to_u16(bunny_model.mesh.indices);
 
     (vertices, indices)
 }
 
+fn load_test_scene() -> (Model, Model, Model) {
+    let obj = tobj::load_obj("test.obj", &tobj::LoadOptions{
+        ignore_lines: false, // Want the line-light
+        ..tobj::GPU_LOAD_OPTIONS
+    });
+    let (mut models, _) = obj.expect("Failed to load test scene");
+    let mut plane = MaybeUninit::<Model>::uninit();
+    let mut triangle = MaybeUninit::<Model>::uninit();
+    let mut line = MaybeUninit::<Model>::uninit();
+    for m in models.drain(..) {
+        match m.name.as_str() {
+            "Plane" => {plane.write(m);},
+            "Triangle" => {triangle.write(m);},
+            "Line" => {line.write(m);},
+            _ => panic!("Wrong model in .obj")
+        }
+    }
+
+    unsafe{ (plane.assume_init(), triangle.assume_init(), line.assume_init()) }
+}
+
 fn main() {
+
+    
     println!("Compiling shaders...");
     let shaders = vec![
         shaders::compile_shader("test.vert", None, shaders::ShaderType::Vertex)
@@ -31,30 +60,23 @@ fn main() {
         shaders::compile_shader("test.frag", None, shaders::ShaderType::Fragment)
             .expect("Could not compile fragment shader"),
     ];
-
+            
     println!("Loading model...");
+    
+    let (plane, triangle, line) = load_test_scene();
 
-    let (verts, indices) = load_bunny();
+    let verts = [unflatten_positions(plane.mesh.positions), unflatten_positions(triangle.mesh.positions)].concat();
+    let plane_indices = indices_to_u16(plane.mesh.indices);
+    let triangle_indices: Vec<u16> = indices_to_u16(triangle.mesh.indices)
+        .into_iter()
+        .map(|i| i + 4) // Four verts in plane
+        .collect();
+    let indices = [plane_indices, triangle_indices].concat();
 
-    // Vertices of a cube
-    // let verts = vec![
-    //     vec3(-0.5, -0.5, -0.5),
-    //     vec3(0.5, -0.5, -0.5),
-    //     vec3(-0.5, 0.5, -0.5),
-    //     vec3(0.5, 0.5, -0.5),
-    //     vec3(-0.5, -0.5, 0.5),
-    //     vec3(0.5, -0.5, 0.5),
-    //     vec3(-0.5, 0.5, 0.5),
-    //     vec3(0.5, 0.5, 0.5),
-    // ];
-    // let indices: Vec<u16> = vec![
-    //     0, 1, 2, 1, 3, 2, //front
-    //     5, 4, 6, 5, 6, 7, //back
-    //     4, 0, 6, 0, 2, 6, //left
-    //     1, 5, 3, 5, 7, 3, //right
-    //     4, 5, 0, 5, 1, 0, //top
-    //     2, 3, 6, 3, 7, 6, //bottom
-    // ];
+    // let (verts, indices) = load_bunny();
+    // println!("verts {}, indices {}", plane.mesh.positions.len()/3, plane.mesh.indices.len());
+    // let verts = unflatten_positions(plane.mesh.positions);
+    // let indices = indices_to_u16(plane.mesh.indices);
 
     let num_indices = indices.len() as u32;
     let vid = VertexInputDescriptors {
@@ -123,25 +145,25 @@ fn main() {
 
                 app.reset_in_flight_fence(current_frame);
 
-                let eye = vec3(0.0, -1.0, 0.0);
-                let model_pos = vec3(0.0, 1.5, 2.0);
+                let eye = vec3(0.0, -3.0, 5.0);
+                let model_pos = vec3(0.0, 0.0, 0.0);
                 let up = vec3(0.0, -1.0, 0.0);
                 let aspect_ratio =
                     app.swapchain_extent.width as f32 / app.swapchain_extent.height as f32;
-                let model_scale = 15.0;
+                let model_scale = 1.0;
 
                 theta = (theta + (ROT_P_SEC * TWO_PI) * timer.elapsed().as_secs_f32()) % TWO_PI;
 
                 let model = Mat4::from_scale_rotation_translation(vec3(model_scale, -model_scale, model_scale), glam::Quat::from_rotation_y(theta), model_pos);
-                let view = Mat4::look_at_lh(eye, vec3(0.0, 0.0, 2.0), up);
+                let view = Mat4::look_at_rh(eye, vec3(0.0, 0.0, 0.0), -up);
                 let projection =
-                    Mat4::perspective_infinite_lh(f32::to_radians(90.0), aspect_ratio, 0.01);
-                let mut correction_mat = Mat4::IDENTITY;
-                correction_mat.y_axis = glam::vec4(0.0, -1.0, 0.0, 0.0);
+                    Mat4::perspective_infinite_rh(f32::to_radians(90.0), aspect_ratio, 0.01);
+                // let mut correction_mat = Mat4::IDENTITY;
+                // correction_mat.y_axis = glam::vec4(0.0, -1.0, 0.0, 0.0);
 
                 let ubo = vk_engine::MVP {
                     model,
-                    view: correction_mat.mul_mat4(&view),
+                    view,
                     projection,
                 };
 
