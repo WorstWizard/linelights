@@ -1296,7 +1296,7 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 [[package]]
 name = "vk_engine"
 version = "0.1.1"
-source = "git+https://github.com/WorstWizard/vk_engine.git#d639e79da12749837038fbb304607fbb586f0ef9"
+source = "git+https://github.com/WorstWizard/vk_engine.git?branch=linelights#7cd42b63328722a343e2dcffc6f9567f1ff15a26"
 dependencies = [
  "ash",
  "ash-window",

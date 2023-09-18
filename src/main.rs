@@ -12,7 +12,10 @@ use tobj::{self, Model};
 static APP_NAME: &str = "Linelight Experiments";
 
 fn unflatten_positions(positions: Vec<f32>) -> Vec<Vec3> {
-    positions.chunks_exact(3).map(|chunk| vec3(chunk[0],chunk[1],chunk[2])).collect()
+    positions
+        .chunks_exact(3)
+        .map(|chunk| vec3(chunk[0], chunk[1], chunk[2]))
+        .collect()
 }
 fn indices_to_u16(indices: Vec<u32>) -> Vec<u16> {
     indices.into_iter().map(|num| num as u16).collect()
@@ -30,42 +33,59 @@ fn load_bunny() -> (Vec<Vec3>, Vec<u16>) {
 }
 
 fn load_test_scene() -> (Model, Model, Model) {
-    let obj = tobj::load_obj("test.obj", &tobj::LoadOptions{
-        ignore_lines: false, // Want the line-light
-        ..tobj::GPU_LOAD_OPTIONS
-    });
+    let obj = tobj::load_obj(
+        "test.obj",
+        &tobj::LoadOptions {
+            ignore_lines: false, // Want the line-light
+            ..tobj::GPU_LOAD_OPTIONS
+        },
+    );
     let (mut models, _) = obj.expect("Failed to load test scene");
     let mut plane = MaybeUninit::<Model>::uninit();
     let mut triangle = MaybeUninit::<Model>::uninit();
     let mut line = MaybeUninit::<Model>::uninit();
     for m in models.drain(..) {
         match m.name.as_str() {
-            "Plane" => {plane.write(m);},
-            "Triangle" => {triangle.write(m);},
-            "Line" => {line.write(m);},
-            _ => panic!("Wrong model in .obj")
+            "Plane" => {
+                plane.write(m);
+            }
+            "Triangle" => {
+                triangle.write(m);
+            }
+            "Line" => {
+                line.write(m);
+            }
+            _ => panic!("Wrong model in .obj"),
         }
     }
 
-    unsafe{ (plane.assume_init(), triangle.assume_init(), line.assume_init()) }
+    unsafe {
+        (
+            plane.assume_init(),
+            triangle.assume_init(),
+            line.assume_init(),
+        )
+    }
 }
 
 fn main() {
-
-    
     println!("Compiling shaders...");
     let shaders = vec![
-        shaders::compile_shader("test.vert", None, shaders::ShaderType::Vertex)
+        shaders::compile_shader("simple_shader.vert", None, shaders::ShaderType::Vertex)
             .expect("Could not compile vertex shader"),
-        shaders::compile_shader("test.frag", None, shaders::ShaderType::Fragment)
+        shaders::compile_shader("simple_shader.frag", None, shaders::ShaderType::Fragment)
             .expect("Could not compile fragment shader"),
     ];
-            
+
     println!("Loading model...");
-    
+
     let (plane, triangle, line) = load_test_scene();
 
-    let verts = [unflatten_positions(plane.mesh.positions), unflatten_positions(triangle.mesh.positions)].concat();
+    let verts = [
+        unflatten_positions(plane.mesh.positions),
+        unflatten_positions(triangle.mesh.positions),
+    ]
+    .concat();
     let plane_indices = indices_to_u16(plane.mesh.indices);
     let triangle_indices: Vec<u16> = indices_to_u16(triangle.mesh.indices)
         .into_iter()
@@ -73,10 +93,10 @@ fn main() {
         .collect();
     let indices = [plane_indices, triangle_indices].concat();
 
+    let line_verts = unflatten_positions(line.mesh.positions);
+    let (l0, l1) = (line_verts[0], line_verts[1]);
+
     // let (verts, indices) = load_bunny();
-    // println!("verts {}, indices {}", plane.mesh.positions.len()/3, plane.mesh.indices.len());
-    // let verts = unflatten_positions(plane.mesh.positions);
-    // let indices = indices_to_u16(plane.mesh.indices);
 
     let num_indices = indices.len() as u32;
     let vid = VertexInputDescriptors {
@@ -117,7 +137,7 @@ fn main() {
     let mut theta = 0.0;
 
     const ROT_P_SEC: f32 = 0.05;
-    const TWO_PI: f32 = 2.0*3.1415926535;
+    const TWO_PI: f32 = 2.0 * 3.1415926535;
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
@@ -145,26 +165,35 @@ fn main() {
 
                 app.reset_in_flight_fence(current_frame);
 
-                let eye = vec3(0.0, -3.0, 5.0);
+                let eye = vec3(0.0, -4.0, 5.0);
                 let model_pos = vec3(0.0, 0.0, 0.0);
                 let up = vec3(0.0, -1.0, 0.0);
                 let aspect_ratio =
                     app.swapchain_extent.width as f32 / app.swapchain_extent.height as f32;
-                let model_scale = 1.0;
+                let model_scale = 0.5;
 
                 theta = (theta + (ROT_P_SEC * TWO_PI) * timer.elapsed().as_secs_f32()) % TWO_PI;
 
-                let model = Mat4::from_scale_rotation_translation(vec3(model_scale, -model_scale, model_scale), glam::Quat::from_rotation_y(theta), model_pos);
+                let model = Mat4::from_scale_rotation_translation(
+                    vec3(model_scale, -model_scale, model_scale),
+                    glam::Quat::from_rotation_y(theta),
+                    model_pos,
+                );
                 let view = Mat4::look_at_rh(eye, vec3(0.0, 0.0, 0.0), -up);
                 let projection =
                     Mat4::perspective_infinite_rh(f32::to_radians(90.0), aspect_ratio, 0.01);
                 // let mut correction_mat = Mat4::IDENTITY;
                 // correction_mat.y_axis = glam::vec4(0.0, -1.0, 0.0, 0.0);
 
-                let ubo = vk_engine::MVP {
+                let mvp = vk_engine::MVP {
                     model,
                     view,
                     projection,
+                };
+
+                let ubo = LineLightUniform {
+                    mvp,
+                    linelight: (l0, l1)
                 };
 
                 unsafe {
@@ -172,7 +201,7 @@ fn main() {
                         app.uniform_buffers[current_frame]
                             .memory_ptr
                             .expect("Uniform buffer not mapped!"),
-                        &ubo as *const vk_engine::MVP,
+                        &ubo as *const LineLightUniform,
                     );
 
                     app.record_command_buffer(current_frame, |app| {
@@ -198,7 +227,9 @@ fn main() {
                 app.submit_drawing_command_buffer(current_frame);
 
                 match app.present_image(img_index, app.sync.render_finished[current_frame]) {
-                    Ok(true) | Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => app.recreate_swapchain(&shaders, &vid, Some(ubo_bindings.clone())),
+                    Ok(true) | Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+                        app.recreate_swapchain(&shaders, &vid, Some(ubo_bindings.clone()))
+                    }
                     Ok(false) => (),
                     _ => panic!("Could not present image!"),
                 }
@@ -209,4 +240,11 @@ fn main() {
             _ => (),
         }
     });
+}
+
+
+#[repr(C)]
+struct LineLightUniform {
+    mvp: MVP,
+    linelight: (Vec3, Vec3)
 }
