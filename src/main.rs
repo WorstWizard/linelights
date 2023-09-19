@@ -96,6 +96,8 @@ fn main() {
     let line_verts = unflatten_positions(line.mesh.positions);
     let (l0, l1) = (line_verts[0], line_verts[1]);
 
+    println!("l0 {}, l1 {}", l0, l1);
+
     // let (verts, indices) = load_bunny();
 
     let num_indices = indices.len() as u32;
@@ -110,10 +112,15 @@ fn main() {
             .input_rate(vk::VertexInputRate::VERTEX)
             .stride(std::mem::size_of::<Vec3>() as u32)],
     };
-    let ubo_vec = vec![vk_engine::MVP {
-        model: Mat4::IDENTITY,
-        view: Mat4::IDENTITY,
-        projection: Mat4::IDENTITY,
+    let ubo_vec = vec![LineLightUniform {
+        l0,
+        l1,
+        mvp: MVP {
+            model: Mat4::IDENTITY,
+            view: Mat4::IDENTITY,
+            projection: Mat4::IDENTITY,
+        },
+        // linelight: (Vec3::ZERO, Vec3::ZERO)
     }];
     let ubo_bindings = uniform_buffer_descriptor_set_layout_bindings(ubo_vec.len());
 
@@ -192,8 +199,10 @@ fn main() {
                 };
 
                 let ubo = LineLightUniform {
+                    l0,
+                    l1,
                     mvp,
-                    linelight: (l0, l1)
+                    // linelight: (l0, l1)
                 };
 
                 unsafe {
@@ -246,5 +255,6 @@ fn main() {
 #[repr(C)]
 struct LineLightUniform {
     mvp: MVP,
-    linelight: (Vec3, Vec3)
+    l0: Vec3,
+    l1: Vec3,
 }

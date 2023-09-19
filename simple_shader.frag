@@ -1,6 +1,7 @@
 #version 450
 
-precision mediump float;
+layout(location = 0) in vec3 pos;
+layout(location = 0) out vec4 outColor;
 
 layout(binding = 0) uniform UBO {
     mat4 model;
@@ -10,8 +11,15 @@ layout(binding = 0) uniform UBO {
     vec3 l1;
 } ubo;
 
-layout(location = 0) out vec4 outColor;
-
 void main() {
-    outColor = vec4(1.0,1.0,1.0,1.0);
+
+    float I = 10.0;
+    float irr_0 = I/pow( distance(pos, ubo.l0), 2.0);
+    //float irr_0 = 0.05;
+    float irr_1 = I/pow( distance(pos, ubo.l1), 2.0);
+    float irr = irr_0 + irr_1;
+
+    vec3 color = vec3(1.0,1.0,1.0) * irr;
+
+    outColor = vec4(color,1.0);
 }
