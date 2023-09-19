@@ -95,6 +95,9 @@ fn main() {
 
     let line_verts = unflatten_positions(line.mesh.positions);
     let (l0, l1) = (line_verts[0], line_verts[1]);
+    
+    let l0 = glam::Vec4::from((l0,1.0));
+    let l1 = glam::Vec4::from((l1,1.0));
 
     println!("l0 {}, l1 {}", l0, l1);
 
@@ -255,6 +258,6 @@ fn main() {
 #[repr(C)]
 struct LineLightUniform {
     mvp: MVP,
-    l0: Vec3,
-    l1: Vec3,
+    l0: glam::Vec4,
+    l1: glam::Vec4,
 }
