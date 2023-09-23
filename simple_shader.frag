@@ -11,9 +11,12 @@ layout(binding = 0) uniform UBO {
     vec4 l1;
 } ubo;
 
-layout(std430, binding = 1) readonly buffer vertexBuffer {
+layout(std430, binding = 2) readonly buffer vertexBuffer {
     vec3 pos[];
 } verts;
+layout(std430, binding = 3) readonly buffer indexBuffer {
+    vec3 pos[];
+} indices;
 
 void main() {
 

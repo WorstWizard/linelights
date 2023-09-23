@@ -22,16 +22,16 @@ fn indices_to_u16(indices: Vec<u32>) -> Vec<u16> {
     indices.into_iter().map(|num| num as u16).collect()
 }
 
-fn load_bunny() -> (Vec<Vec3>, Vec<u16>) {
-    let bunny = tobj::load_obj("bunny.obj", &tobj::GPU_LOAD_OPTIONS);
-    let (mut models, _) = bunny.expect("Failed to load model!");
-    let bunny_model = models.pop().unwrap();
+// fn load_bunny() -> (Vec<Vec3>, Vec<u16>) {
+//     let bunny = tobj::load_obj("bunny.obj", &tobj::GPU_LOAD_OPTIONS);
+//     let (mut models, _) = bunny.expect("Failed to load model!");
+//     let bunny_model = models.pop().unwrap();
 
-    let vertices = unflatten_positions(bunny_model.mesh.positions);
-    let indices = indices_to_u16(bunny_model.mesh.indices);
+//     let vertices = unflatten_positions(bunny_model.mesh.positions);
+//     let indices = indices_to_u16(bunny_model.mesh.indices);
 
-    (vertices, indices)
-}
+//     (vertices, indices)
+// }
 
 fn load_test_scene() -> (Model, Model, Model) {
     let obj = tobj::load_obj(
@@ -101,8 +101,6 @@ fn main() {
     let l0 = glam::Vec4::from((l0, 1.0));
     let l1 = glam::Vec4::from((l1, 1.0));
 
-    // let (verts, indices) = load_bunny();
-
     let num_indices = indices.len() as u32;
     let vid = VertexInputDescriptors {
         attributes: vec![*vk::VertexInputAttributeDescription::builder()
@@ -115,37 +113,34 @@ fn main() {
             .input_rate(vk::VertexInputRate::VERTEX)
             .stride(std::mem::size_of::<Vec3>() as u32)],
     };
-    let ubo_vec = vec![LineLightUniform {
-        l0,
-        l1,
-        mvp: MVP {
-            model: Mat4::IDENTITY,
-            view: Mat4::IDENTITY,
-            projection: Mat4::IDENTITY,
-        },
-        // linelight: (Vec3::ZERO, Vec3::ZERO)
-    }];
-    // let ubo_bindings = uniform_buffer_descriptor_set_layout_bindings(ubo_vec.len());
+
     let ubo_bindings = {
         let mut binding_vec = Vec::with_capacity(3);
         binding_vec.push(
             *vk::DescriptorSetLayoutBinding::builder()
-                .binding(0_u32)
+                .binding(0)
                 .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT),
         );
         binding_vec.push(
             *vk::DescriptorSetLayoutBinding::builder()
-                .binding(1_u32)
+            .binding(1)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT),
+        );
+        binding_vec.push(
+            *vk::DescriptorSetLayoutBinding::builder()
+                .binding(2)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::FRAGMENT),
         );
         binding_vec.push(
             *vk::DescriptorSetLayoutBinding::builder()
-                .binding(2_u32)
-                .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+                .binding(3)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::FRAGMENT),
         );
@@ -156,38 +151,38 @@ fn main() {
     let (window, event_loop) = init_window(APP_NAME, 800, 600);
 
     println!("Initializing application...");
-    let mut app = BaseApp::new(
+    let mut app = BaseApp::new::<Vec3, u16, LineLightUniform>(
         window,
         APP_NAME,
         &shaders,
         verts.clone(),
-        indices,
+        indices.clone(),
         &vid,
-        Some(ubo_vec),
-        Some(ubo_bindings.clone()),
+        ubo_bindings.clone(),
     );
 
-    // Change vertex buffer to support usage in as ssbo in fragment shader
-    {
+    // Change vertex and index buffer to support usage in as ssbo in fragment shader
+
+    fn remake_buffer<T: Sized>(app: &mut BaseApp, buffer_data: &Vec<T>, usage_flags: vk::BufferUsageFlags) -> engine_core::ManagedBuffer {
         let new_buffer = {
-            let vertex_buffer = engine_core::buffer::create_buffer(
+            let buffer = engine_core::buffer::create_buffer(
                 &app.logical_device,
-                (std::mem::size_of::<Vec3>() * num_verts) as u64,
-                vk::BufferUsageFlags::VERTEX_BUFFER | vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
+                (std::mem::size_of::<T>() * buffer_data.len()) as u64,
+                usage_flags | vk::BufferUsageFlags::TRANSFER_DST,
             );
-            let vertex_buffer_memory = engine_core::buffer::allocate_and_bind_buffer(
+            let buffer_memory = engine_core::buffer::allocate_and_bind_buffer(
                 &app.instance,
                 &app.physical_device,
                 &app.logical_device,
-                vertex_buffer,
+                buffer,
                 vk::MemoryPropertyFlags::DEVICE_LOCAL,
             );
-        
+
             engine_core::ManagedBuffer {
                 logical_device: Rc::clone(&app.logical_device),
                 // memory_size,
-                buffer: vertex_buffer,
-                buffer_memory: Some(vertex_buffer_memory),
+                buffer,
+                buffer_memory: Some(buffer_memory),
                 memory_ptr: None,
             }
         };
@@ -196,12 +191,12 @@ fn main() {
             &app.instance,
             &app.physical_device,
             &app.logical_device,
-            (std::mem::size_of::<Vec3>() * num_verts) as u64,
+            (std::mem::size_of::<T>() * buffer_data.len()) as u64,
         );
         staging_buffer.map_buffer_memory();
 
         unsafe {
-            engine_core::write_vec_to_buffer(staging_buffer.memory_ptr.unwrap(), verts.clone())
+            engine_core::write_vec_to_buffer(staging_buffer.memory_ptr.unwrap(), buffer_data)
         };
         engine_core::copy_buffer(
             &app.logical_device,
@@ -209,11 +204,17 @@ fn main() {
             app.graphics_queue,
             *staging_buffer,
             *new_buffer,
-            (std::mem::size_of::<Vec3>() * num_verts) as u64,
+            (std::mem::size_of::<T>() * buffer_data.len()) as u64,
         );
 
-        *app.vertex_buffer = new_buffer;
+        new_buffer
     }
+    
+    *app.vertex_buffer = remake_buffer(&mut app, &verts, vk::BufferUsageFlags::VERTEX_BUFFER | vk::BufferUsageFlags::STORAGE_BUFFER);
+    *app.index_buffer = remake_buffer(&mut app, &indices, vk::BufferUsageFlags::INDEX_BUFFER | vk::BufferUsageFlags::STORAGE_BUFFER);
+
+    // Update descriptors
+    app.update_descriptor_sets::<LineLightUniform, Vec3, u16>(num_verts as u64, num_indices as u64);
 
     let mut current_frame = 0;
     let mut timer = std::time::Instant::now();
@@ -239,7 +240,7 @@ fn main() {
 
                 let img_index = match app.acquire_next_image(current_frame) {
                     Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
-                        app.recreate_swapchain(&shaders, &vid, Some(ubo_bindings.clone()));
+                        app.recreate_swapchain(&shaders, &vid, ubo_bindings.clone());
                         return;
                     }
                     Ok((i, _)) => i, // Swapchain may be suboptimal, but it's easier to just proceed
@@ -313,7 +314,7 @@ fn main() {
 
                 match app.present_image(img_index, app.sync.render_finished[current_frame]) {
                     Ok(true) | Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
-                        app.recreate_swapchain(&shaders, &vid, Some(ubo_bindings.clone()))
+                        app.recreate_swapchain(&shaders, &vid, ubo_bindings.clone())
                     }
                     Ok(false) => (),
                     _ => panic!("Could not present image!"),
