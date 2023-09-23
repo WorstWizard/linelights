@@ -18,9 +18,9 @@ fn unflatten_positions(positions: Vec<f32>) -> Vec<Vec3> {
         .map(|chunk| vec3(chunk[0], chunk[1], chunk[2]))
         .collect()
 }
-fn indices_to_u16(indices: Vec<u32>) -> Vec<u16> {
-    indices.into_iter().map(|num| num as u16).collect()
-}
+// fn indices_to_u16(indices: Vec<u32>) -> Vec<u16> {
+//     indices.into_iter().map(|num| num as u16).collect()
+// }
 
 // fn load_bunny() -> (Vec<Vec3>, Vec<u16>) {
 //     let bunny = tobj::load_obj("bunny.obj", &tobj::GPU_LOAD_OPTIONS);
@@ -88,8 +88,10 @@ fn main() {
     ]
     .concat();
     let num_verts = verts.len();
-    let plane_indices = indices_to_u16(plane.mesh.indices);
-    let triangle_indices: Vec<u16> = indices_to_u16(triangle.mesh.indices)
+    // let plane_indices = indices_to_u16(plane.mesh.indices);
+    let plane_indices = plane.mesh.indices;
+    // let triangle_indices: Vec<u16> = indices_to_u16(triangle.mesh.indices)
+    let triangle_indices: Vec<u32> = triangle.mesh.indices
         .into_iter()
         .map(|i| i + 4) // Four verts in plane
         .collect();
@@ -151,7 +153,7 @@ fn main() {
     let (window, event_loop) = init_window(APP_NAME, 800, 600);
 
     println!("Initializing application...");
-    let mut app = BaseApp::new::<Vec3, u16, LineLightUniform>(
+    let mut app = BaseApp::new::<Vec3, u32, LineLightUniform>(
         window,
         APP_NAME,
         &shaders,
@@ -214,7 +216,7 @@ fn main() {
     *app.index_buffer = remake_buffer(&mut app, &indices, vk::BufferUsageFlags::INDEX_BUFFER | vk::BufferUsageFlags::STORAGE_BUFFER);
 
     // Update descriptors
-    app.update_descriptor_sets::<LineLightUniform, Vec3, u16>(num_verts as u64, num_indices as u64);
+    app.update_descriptor_sets::<LineLightUniform, Vec3, u32>(num_verts as u64, num_indices as u64);
 
     let mut current_frame = 0;
     let mut timer = std::time::Instant::now();
@@ -306,6 +308,7 @@ fn main() {
                                 );
                             },
                             &[0.0],
+                            vk::IndexType::UINT32
                         )
                     })
                 }
