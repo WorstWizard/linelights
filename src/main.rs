@@ -1,4 +1,5 @@
 use std::mem::MaybeUninit;
+use std::rc::Rc;
 
 use ash::vk;
 use glam::{vec3, Mat4, Vec3};
@@ -86,6 +87,7 @@ fn main() {
         unflatten_positions(triangle.mesh.positions),
     ]
     .concat();
+    let num_verts = verts.len();
     let plane_indices = indices_to_u16(plane.mesh.indices);
     let triangle_indices: Vec<u16> = indices_to_u16(triangle.mesh.indices)
         .into_iter()
@@ -95,11 +97,9 @@ fn main() {
 
     let line_verts = unflatten_positions(line.mesh.positions);
     let (l0, l1) = (line_verts[0], line_verts[1]);
-    
-    let l0 = glam::Vec4::from((l0,1.0));
-    let l1 = glam::Vec4::from((l1,1.0));
 
-    println!("l0 {}, l1 {}", l0, l1);
+    let l0 = glam::Vec4::from((l0, 1.0));
+    let l1 = glam::Vec4::from((l1, 1.0));
 
     // let (verts, indices) = load_bunny();
 
@@ -125,7 +125,32 @@ fn main() {
         },
         // linelight: (Vec3::ZERO, Vec3::ZERO)
     }];
-    let ubo_bindings = uniform_buffer_descriptor_set_layout_bindings(ubo_vec.len());
+    // let ubo_bindings = uniform_buffer_descriptor_set_layout_bindings(ubo_vec.len());
+    let ubo_bindings = {
+        let mut binding_vec = Vec::with_capacity(3);
+        binding_vec.push(
+            *vk::DescriptorSetLayoutBinding::builder()
+                .binding(0_u32)
+                .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+                .descriptor_count(1)
+                .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT),
+        );
+        binding_vec.push(
+            *vk::DescriptorSetLayoutBinding::builder()
+                .binding(1_u32)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                .descriptor_count(1)
+                .stage_flags(vk::ShaderStageFlags::FRAGMENT),
+        );
+        binding_vec.push(
+            *vk::DescriptorSetLayoutBinding::builder()
+                .binding(2_u32)
+                .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+                .descriptor_count(1)
+                .stage_flags(vk::ShaderStageFlags::FRAGMENT),
+        );
+        binding_vec
+    };
 
     println!("Setting up window...");
     let (window, event_loop) = init_window(APP_NAME, 800, 600);
@@ -135,12 +160,60 @@ fn main() {
         window,
         APP_NAME,
         &shaders,
-        verts,
+        verts.clone(),
         indices,
         &vid,
         Some(ubo_vec),
         Some(ubo_bindings.clone()),
     );
+
+    // Change vertex buffer to support usage in as ssbo in fragment shader
+    {
+        let new_buffer = {
+            let vertex_buffer = engine_core::buffer::create_buffer(
+                &app.logical_device,
+                (std::mem::size_of::<Vec3>() * num_verts) as u64,
+                vk::BufferUsageFlags::VERTEX_BUFFER | vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
+            );
+            let vertex_buffer_memory = engine_core::buffer::allocate_and_bind_buffer(
+                &app.instance,
+                &app.physical_device,
+                &app.logical_device,
+                vertex_buffer,
+                vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            );
+        
+            engine_core::ManagedBuffer {
+                logical_device: Rc::clone(&app.logical_device),
+                // memory_size,
+                buffer: vertex_buffer,
+                buffer_memory: Some(vertex_buffer_memory),
+                memory_ptr: None,
+            }
+        };
+
+        let mut staging_buffer = engine_core::create_staging_buffer(
+            &app.instance,
+            &app.physical_device,
+            &app.logical_device,
+            (std::mem::size_of::<Vec3>() * num_verts) as u64,
+        );
+        staging_buffer.map_buffer_memory();
+
+        unsafe {
+            engine_core::write_vec_to_buffer(staging_buffer.memory_ptr.unwrap(), verts.clone())
+        };
+        engine_core::copy_buffer(
+            &app.logical_device,
+            app.command_pool,
+            app.graphics_queue,
+            *staging_buffer,
+            *new_buffer,
+            (std::mem::size_of::<Vec3>() * num_verts) as u64,
+        );
+
+        *app.vertex_buffer = new_buffer;
+    }
 
     let mut current_frame = 0;
     let mut timer = std::time::Instant::now();
@@ -253,7 +326,6 @@ fn main() {
         }
     });
 }
-
 
 #[repr(C)]
 struct LineLightUniform {
