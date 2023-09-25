@@ -33,6 +33,18 @@ fn unflatten_positions(positions: Vec<f32>) -> Vec<Vec3> {
 //     (vertices, indices)
 // }
 
+#[repr(C)]
+struct LineLightUniform {
+    mvp: MVP,
+    l0: glam::Vec4,
+    l1: glam::Vec4,
+}
+#[repr(C)]
+struct Vertex {
+    pos: Vec3,
+    normal: Vec3,
+}
+
 fn load_test_scene() -> (Model, Model, Model) {
     let obj = tobj::load_obj(
         "test.obj",
@@ -67,6 +79,10 @@ fn load_test_scene() -> (Model, Model, Model) {
             line.assume_init(),
         )
     }
+}
+
+fn make_vertices(model: Model) -> Vec<Vertex> {
+    // TODO TOMORROW
 }
 
 fn main() {
@@ -329,11 +345,4 @@ fn main() {
             _ => (),
         }
     });
-}
-
-#[repr(C)]
-struct LineLightUniform {
-    mvp: MVP,
-    l0: glam::Vec4,
-    l1: glam::Vec4,
 }
