@@ -81,9 +81,21 @@ fn load_test_scene() -> (Model, Model, Model) {
     }
 }
 
-fn make_vertices(model: Model) -> Vec<Vertex> {
-    // TODO TOMORROW
-}
+// fn make_vertices(model: Model) -> Vec<Vertex> {
+//     // TODO TOMORROW
+//     let positions: Vec<Vec3> = model
+//         .mesh
+//         .positions
+//         .chunks_exact(3)
+//         .map(|c| vec3(c[0], c[1], c[2]))
+//         .collect();
+//     let mut normals = Vec::with_capacity(model.mesh.normal_indices.len());
+//     for idx in model.mesh.normal_indices {
+//         normals.push(model.mesh.normals[idx as usize])
+//     }
+
+//     positions.into_iter().zip(normals.into_iter()).map(|pos, normal| Vertex {pos, normal})
+// }
 
 fn main() {
     println!("Compiling shaders...");
@@ -107,7 +119,9 @@ fn main() {
     // let plane_indices = indices_to_u16(plane.mesh.indices);
     let plane_indices = plane.mesh.indices;
     // let triangle_indices: Vec<u16> = indices_to_u16(triangle.mesh.indices)
-    let triangle_indices: Vec<u32> = triangle.mesh.indices
+    let triangle_indices: Vec<u32> = triangle
+        .mesh
+        .indices
         .into_iter()
         .map(|i| i + 4) // Four verts in plane
         .collect();
@@ -143,10 +157,10 @@ fn main() {
         );
         binding_vec.push(
             *vk::DescriptorSetLayoutBinding::builder()
-            .binding(1)
-            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-            .descriptor_count(1)
-            .stage_flags(vk::ShaderStageFlags::FRAGMENT),
+                .binding(1)
+                .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+                .descriptor_count(1)
+                .stage_flags(vk::ShaderStageFlags::FRAGMENT),
         );
         binding_vec.push(
             *vk::DescriptorSetLayoutBinding::builder()
@@ -181,7 +195,11 @@ fn main() {
 
     // Change vertex and index buffer to support usage in as ssbo in fragment shader
 
-    fn remake_buffer<T: Sized>(app: &mut BaseApp, buffer_data: &Vec<T>, usage_flags: vk::BufferUsageFlags) -> engine_core::ManagedBuffer {
+    fn remake_buffer<T: Sized>(
+        app: &mut BaseApp,
+        buffer_data: &Vec<T>,
+        usage_flags: vk::BufferUsageFlags,
+    ) -> engine_core::ManagedBuffer {
         let new_buffer = {
             let buffer = engine_core::buffer::create_buffer(
                 &app.logical_device,
@@ -227,9 +245,17 @@ fn main() {
 
         new_buffer
     }
-    
-    *app.vertex_buffer = remake_buffer(&mut app, &verts, vk::BufferUsageFlags::VERTEX_BUFFER | vk::BufferUsageFlags::STORAGE_BUFFER);
-    *app.index_buffer = remake_buffer(&mut app, &indices, vk::BufferUsageFlags::INDEX_BUFFER | vk::BufferUsageFlags::STORAGE_BUFFER);
+
+    *app.vertex_buffer = remake_buffer(
+        &mut app,
+        &verts,
+        vk::BufferUsageFlags::VERTEX_BUFFER | vk::BufferUsageFlags::STORAGE_BUFFER,
+    );
+    *app.index_buffer = remake_buffer(
+        &mut app,
+        &indices,
+        vk::BufferUsageFlags::INDEX_BUFFER | vk::BufferUsageFlags::STORAGE_BUFFER,
+    );
 
     // Update descriptors
     app.update_descriptor_sets::<LineLightUniform, Vec3, u32>(num_verts as u64, num_indices as u64);
@@ -324,7 +350,7 @@ fn main() {
                                 );
                             },
                             &[0.0],
-                            vk::IndexType::UINT32
+                            vk::IndexType::UINT32,
                         )
                     })
                 }

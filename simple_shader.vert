@@ -9,9 +9,9 @@ layout(binding = 0) uniform UBO {
     mat4 proj;
     vec4 l0;
     vec4 l1;
-} ubo;
+};
 
 void main() {
     outPos = inPos;
-    gl_Position = ubo.proj * ubo.view * ubo.model * vec4(inPos, 1.0);
+    gl_Position = proj * view * model * vec4(inPos, 1.0);
 }
