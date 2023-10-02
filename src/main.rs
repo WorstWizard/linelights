@@ -102,7 +102,7 @@ fn main() {
     let shaders = vec![
         shaders::compile_shader("simple_shader.vert", None, shaders::ShaderType::Vertex)
             .expect("Could not compile vertex shader"),
-        shaders::compile_shader("simple_shader.frag", None, shaders::ShaderType::Fragment)
+        shaders::compile_shader("analytic.frag", None, shaders::ShaderType::Fragment)
             .expect("Could not compile fragment shader"),
     ];
 
@@ -264,7 +264,7 @@ fn main() {
     let mut timer = std::time::Instant::now();
     let mut theta = 0.0;
 
-    const ROT_P_SEC: f32 = 0.05;
+    const ROT_P_SEC: f32 = 0.0;
     const TWO_PI: f32 = 2.0 * 3.1415926535;
 
     event_loop.run(move |event, _, control_flow| {
