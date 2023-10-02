@@ -62,8 +62,6 @@ vec3 to_world(vec4 v) {
 }
 
 void main() {
-    float I = 1.0;
-
     vec3 pos = to_world(inPos);
     vec3 l0_pos = to_world(l0);
     vec3 l1_pos = to_world(l1);
@@ -71,8 +69,8 @@ void main() {
     float d0 = distance(pos, l0_pos);
     float d1 = distance(pos, l1_pos);
 
-    float irr_0 = I/pow( d0, 2.0);
-    float irr_1 = I/pow( d1, 2.0);
+    float irr_0 = 0.5;
+    float irr_1 = 0.5;
 
     Ray ray0; ray0.origin = pos; ray0.direction = normalize(l0_pos - pos); ray0.t_max = d0;
     Ray ray1; ray1.origin = pos; ray1.direction = normalize(l1_pos - pos); ray1.t_max = d1;
@@ -86,7 +84,7 @@ void main() {
         if ( ray_triangle_intersect(ray1, v0, v1, v2) ) irr_1 = 0.0;
     }
     float irr = irr_0 + irr_1;
-    vec3 color = vec3(1.0,1.0,1.0) * irr + vec3(0.1);
+    vec3 color = vec3(0.9,0.0,0.0) * irr + vec3(0.1);
 
     outColor = vec4(color,1.0);
 }

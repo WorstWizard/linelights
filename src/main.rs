@@ -102,7 +102,7 @@ fn main() {
     let shaders = vec![
         shaders::compile_shader("simple_shader.vert", None, shaders::ShaderType::Vertex)
             .expect("Could not compile vertex shader"),
-        shaders::compile_shader("analytic.frag", None, shaders::ShaderType::Fragment)
+        shaders::compile_shader("stochastic.frag", None, shaders::ShaderType::Fragment)
             .expect("Could not compile fragment shader"),
     ];
 
