@@ -4,12 +4,16 @@
 layout(location = 0) in vec3 inPos;
 layout(location = 0) out vec4 outColor;
 
+struct Line {
+    vec4 l0;
+    vec4 l1;
+};
+
 layout(binding = 0) uniform UBO {
     mat4 model;
     mat4 view;
     mat4 proj;
-    vec4 l0;
-    vec4 l1;
+    Line light;
 };
 
 layout(binding = 1) uniform sampler2D texSampler;
@@ -26,6 +30,13 @@ struct Ray {
     vec3 direction;
     float t_max;
 };
+
+vec3 to_world(vec3 v) {
+    return (model*vec4(v,1.0)).xyz;
+}
+vec3 to_world(vec4 v) {
+    return (model*v).xyz;
+}
 
 // Møller-Trumbore intersection
 bool ray_triangle_intersect(Ray r, vec3 v0, vec3 v1, vec3 v2) {
@@ -56,44 +67,61 @@ bool ray_triangle_intersect(Ray r, vec3 v0, vec3 v1, vec3 v2) {
     return false;
 }
 
-vec3 to_world(vec3 v) {
-    return (model*vec4(v,1.0)).xyz;
+bool intersect_scene(Ray r) {
+    for (int i = 0; i < indices.length(); i += 3) {
+        vec3 v0 = to_world(verts[indices[i]]);
+        vec3 v1 = to_world(verts[indices[i+1]]);
+        vec3 v2 = to_world(verts[indices[i+2]]);
+
+        if ( ray_triangle_intersect(r, v0, v1, v2) ) return true;
+    }
+    return false;
 }
-vec3 to_world(vec4 v) {
-    return (model*v).xyz;
+
+
+float sample_noise(int i) {
+    float tx = fract(gl_FragCoord.x / 256.0 + 1.2345*float(i));
+    float ty = fract(gl_FragCoord.y / 256.0 + 6.7890*float(i));
+    vec4 data = texture(texSampler, vec2(tx,ty));
+    return data.r;
+}
+
+const int NUM_SAMPLES = 128;
+float sample_line_light_stochastic(vec3 pos, vec3 n, vec3 l0, vec3 l1, float I) {
+    vec3 l_dir = l1 - l0;
+
+    float irr = 0.0;
+    for (int i=0; i<NUM_SAMPLES; i++) {
+
+        float t = sample_noise(i); // Sampled blue noise in [0.0 ; 1.0]
+        vec3 target = l0 + t*l_dir;
+        vec3 l = target - pos;
+        float d = length(l);
+
+        Ray r;
+        r.origin = pos;
+        r.direction = l/d;
+        r.t_max = d;
+
+        if (intersect_scene(r)) continue;
+
+        float clamped_cos = clamp(dot(n,l/d), 0.0, 1.0);
+        irr += I * clamped_cos / (d*d) / float(NUM_SAMPLES);
+    }
+    return irr;
 }
 
 void main() {
 
-    vec4 data = texture(texSampler, gl_FragCoord.xy / vec2(800.0,600.0));
+    float I = 2.0;
+    vec3 ambient = vec3(0.1);
 
-    // float I = 1.0;
+    vec3 pos = to_world(inPos);
+    vec3 l0 = to_world(light.l0);
+    vec3 l1 = to_world(light.l1);
 
-    // vec3 pos = to_world(inPos);
-    // vec3 l0_pos = to_world(l0);
-    // vec3 l1_pos = to_world(l1);
+    float irr = sample_line_light_stochastic(pos, vec3(0.0,-1.0,0.0), l0, l1, I);
 
-    // float d0 = distance(pos, l0_pos);
-    // float d1 = distance(pos, l1_pos);
-
-    // float irr_0 = I/pow( d0, 2.0);
-    // float irr_1 = I/pow( d1, 2.0);
-
-    // Ray ray0; ray0.origin = pos; ray0.direction = normalize(l0_pos - pos); ray0.t_max = d0;
-    // Ray ray1; ray1.origin = pos; ray1.direction = normalize(l1_pos - pos); ray1.t_max = d1;
-
-    // for (int i = 0; i < indices.length(); i += 3) {
-    //     vec3 v0 = to_world(verts[indices[i]]);
-    //     vec3 v1 = to_world(verts[indices[i+1]]);
-    //     vec3 v2 = to_world(verts[indices[i+2]]);
-
-    //     if ( ray_triangle_intersect(ray0, v0, v1, v2) ) irr_0 = 0.0;
-    //     if ( ray_triangle_intersect(ray1, v0, v1, v2) ) irr_1 = 0.0;
-    // }
-    // float irr = irr_0 + irr_1;
-    // vec3 color = vec3(1.0,1.0,1.0) * irr + vec3(0.1);
-
-    // outColor = vec4(color,1.0);
-
-    outColor = vec4(data.rgb, 1.0);
+    vec3 color = irr * vec3(1.0,1.0,1.0) + ambient;
+    outColor = vec4(color,1.0);
 }

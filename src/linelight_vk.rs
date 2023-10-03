@@ -159,7 +159,6 @@ pub fn make_custom_app(
     );
 
     // Change vertex and index buffer to support usage in as ssbo in fragment shader
-
     fn remake_buffer<T: Sized>(
         app: &mut BaseApp,
         buffer_data: &Vec<T>,
@@ -221,6 +220,11 @@ pub fn make_custom_app(
         &indices,
         vk::BufferUsageFlags::INDEX_BUFFER | vk::BufferUsageFlags::STORAGE_BUFFER,
     );
+
+
+    // Change texture to a noise texture
+    let new_texture = engine_core::load_image_immediate(&app.instance, &app.physical_device, &app.logical_device, app.command_pool, app.graphics_queue, "noise.png");
+    *app.texture = new_texture;
 
     // Update descriptors
     app.update_descriptor_sets::<LineLightUniform, Vec3, u32>(num_verts as u64, num_indices as u64);

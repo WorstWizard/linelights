@@ -89,12 +89,6 @@ void main() {
     vec3 l0 = to_world(light.l0);
     vec3 l1 = to_world(light.l1);
 
-    // for (int i = 0; i < indices.length(); i += 3) {
-    //     vec3 v0 = to_world(verts[indices[i]]);
-    //     vec3 v1 = to_world(verts[indices[i+1]]);
-    //     vec3 v2 = to_world(verts[indices[i+2]]);
-    // }
-
     // float irr = sample_line_light(pos, vec3(0.0,-1.0,0.0), l0, l1, I);
     float irr = sample_line_light_analytic(pos, vec3(0.0,-1.0,0.0), l0, l1, I);
     vec3 color = irr * vec3(1.0,1.0,1.0) + ambient;
