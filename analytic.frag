@@ -82,7 +82,7 @@ float sample_line_light_analytic(vec3 pos, vec3 n, vec3 l0, vec3 l1, float I) {
 }
 
 void main() {
-    float I = 2.0;
+    float I = 1.0;
     vec3 ambient = vec3(0.1);
 
     vec3 pos = to_world(inPos);

@@ -222,9 +222,9 @@ pub fn make_custom_app(
     );
 
 
-    // Change texture to a noise texture
-    let new_texture = engine_core::load_image_immediate(&app.instance, &app.physical_device, &app.logical_device, app.command_pool, app.graphics_queue, "noise.png");
-    *app.texture = new_texture;
+    // // Change texture to a noise texture
+    // let new_texture = engine_core::load_image_immediate(&app.instance, &app.physical_device, &app.logical_device, app.command_pool, app.graphics_queue, "noise.png");
+    // *app.texture = new_texture;
 
     // Update descriptors
     app.update_descriptor_sets::<LineLightUniform, Vec3, u32>(num_verts as u64, num_indices as u64);

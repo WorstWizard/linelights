@@ -78,22 +78,32 @@ bool intersect_scene(Ray r) {
     return false;
 }
 
-
-float sample_noise(int i) {
-    float tx = fract(gl_FragCoord.x / 256.0 + 1.2345*float(i));
-    float ty = fract(gl_FragCoord.y / 256.0 + 6.7890*float(i));
-    vec4 data = texture(texSampler, vec2(tx,ty));
-    return data.r;
+// 2D hash with good performance, as per https://www.shadertoy.com/view/4tXyWN, recommended/tested in [Jarzynski 2020]
+uint hash(uvec2 x)
+{
+    uvec2 q = 1103515245U * ( (x>>1U) ^ (x.yx   ) );
+    uint  n = 1103515245U * ( (q.x  ) ^ (q.y>>3U) );
+    return n;
+}
+// PCG PRNG as per https://www.reedbeta.com/blog/hash-functions-for-gpu-rendering/
+uint rng_state;
+float rand_pcg()
+{
+    uint state = rng_state;
+    rng_state = rng_state * 747796405u + 2891336453u;
+    uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+    uint n = (word >> 22u) ^ word;
+    return float(n) * (1.0/float(0xffffffffU));
 }
 
-const int NUM_SAMPLES = 128;
+const int NUM_SAMPLES = 16;
 float sample_line_light_stochastic(vec3 pos, vec3 n, vec3 l0, vec3 l1, float I) {
     vec3 l_dir = l1 - l0;
 
     float irr = 0.0;
     for (int i=0; i<NUM_SAMPLES; i++) {
 
-        float t = sample_noise(i); // Sampled blue noise in [0.0 ; 1.0]
+        float t = rand_pcg();
         vec3 target = l0 + t*l_dir;
         vec3 l = target - pos;
         float d = length(l);
@@ -112,8 +122,9 @@ float sample_line_light_stochastic(vec3 pos, vec3 n, vec3 l0, vec3 l1, float I) 
 }
 
 void main() {
+    rng_state = hash(uvec2(uint(gl_FragCoord.x),uint(gl_FragCoord.y)));
 
-    float I = 2.0;
+    float I = 1.0;
     vec3 ambient = vec3(0.1);
 
     vec3 pos = to_world(inPos);
