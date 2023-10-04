@@ -16,8 +16,6 @@ layout(binding = 0) uniform UBO {
     Line light;
 };
 
-layout(binding = 1) uniform sampler2D texSampler;
-
 layout(scalar, binding = 2) readonly buffer vertexBuffer {
     vec3 verts[];
 };
