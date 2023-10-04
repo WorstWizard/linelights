@@ -94,7 +94,7 @@ float rand_pcg()
     return float(n) * (1.0/float(0xffffffffU));
 }
 
-const int NUM_SAMPLES = 16;
+const int NUM_SAMPLES = 512;
 float sample_line_light_stochastic(vec3 pos, vec3 n, vec3 l0, vec3 l1, float I) {
     vec3 l_dir = l1 - l0;
 
@@ -123,7 +123,7 @@ void main() {
     rng_state = hash(uvec2(uint(gl_FragCoord.x),uint(gl_FragCoord.y)));
 
     float I = 1.0;
-    vec3 ambient = vec3(0.1);
+    vec3 ambient = vec3(0.0);
 
     vec3 pos = to_world(inPos);
     vec3 l0 = to_world(light.l0);

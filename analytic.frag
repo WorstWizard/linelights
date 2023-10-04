@@ -4,16 +4,12 @@
 layout(location = 0) in vec3 inPos;
 layout(location = 0) out vec4 outColor;
 
-struct Line {
-    vec4 l0;
-    vec4 l1;
-};
-
 layout(binding = 0) uniform UBO {
     mat4 model;
     mat4 view;
     mat4 proj;
-    Line light;
+    vec4 l0_ubo;
+    vec4 l1_ubo;
 };
 
 layout(scalar, binding = 2) readonly buffer vertexBuffer {
@@ -81,13 +77,28 @@ float sample_line_light_analytic(vec3 pos, vec3 n, vec3 l0, vec3 l1, float I) {
     return I * (t1 + t2 + t3 - t4) / t5;
 }
 
+struct Line {
+    vec3 l0;
+    vec3 l1;
+};
+
+struct SegmentArray {
+    Line[32] segments;
+};
+
+
+SegmentArray visible_line_segments(vec3 pos, Line light) {
+    Line[32] line_arr;
+    return SegmentArray( line_arr );
+}
+
 void main() {
     float I = 1.0;
-    vec3 ambient = vec3(0.1);
+    vec3 ambient = vec3(0.0);
 
     vec3 pos = to_world(inPos);
-    vec3 l0 = to_world(light.l0);
-    vec3 l1 = to_world(light.l1);
+    vec3 l0 = to_world(l0_ubo);
+    vec3 l1 = to_world(l1_ubo);
 
     // float irr = sample_line_light(pos, vec3(0.0,-1.0,0.0), l0, l1, I);
     float irr = sample_line_light_analytic(pos, vec3(0.0,-1.0,0.0), l0, l1, I);
