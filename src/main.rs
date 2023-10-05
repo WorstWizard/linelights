@@ -7,7 +7,7 @@ use winit::event_loop::ControlFlow;
 mod linelight_vk;
 
 fn main() {
-    let shaders = linelight_vk::make_shaders("simple_shader.vert", "debug.frag");
+    let shaders = linelight_vk::make_shaders("simple_shader.vert", "analytic.frag");
     let ubo_bindings = linelight_vk::make_ubo_bindings();
     let (mut app, event_loop, vid, num_indices, (l0, l1)) = linelight_vk::make_custom_app(&shaders, &ubo_bindings);
 
