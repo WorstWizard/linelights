@@ -65,9 +65,9 @@ vec3 to_world(vec4 v) {
 
 
 
-// WIP triangle-triangle intersection per Möller 97
+// Triangle-triangle intersection per Möller 97
 // https://fileadmin.cs.lth.se/cs/Personal/Tomas_Akenine-Moller/code/opttritri.txt
-void compute_intervals(
+bool compute_intervals(
     float vp0,
     float vp1,
     float vp2,
@@ -92,11 +92,14 @@ void compute_intervals(
         a = vp1; b = (vp0-vp1)*d1; c = (vp2-vp1)*d1; x0 = d1-d0; x1 = d1-d2;
     } else if (d2 != 0.0) {
         a = vp2; b = (vp0-vp2)*d2; c = (vp1-vp2)*d2; x0 = d2-d0; x1 = d2-d1;
+    } else {
+        //Triangles are coplanar, not a case I want to handle, do nothing in this case
+        return false;
     }
-    // Else: Triangles are coplanar, not a case I want to handle, do nothing in this case
+    return true;
 }
 
-void sort(out float a, out float b) {
+void sort(inout float a, inout float b) {
     if (a > b) {
         float c = a;
         a = b;
@@ -141,6 +144,8 @@ bool tri_tri_intersect(
 
     if (dv0dv1 > 0.0 && dv0dv2 > 0.0) return false;
 
+    
+
     // Compute intersection line direction
     vec3 dir = cross(n1,n2);
 
@@ -159,7 +164,7 @@ bool tri_tri_intersect(
     float up1 = u1[i];
     float up2 = u2[i];
 
-    // Compute interval for triangle 1
+    // // Compute interval for triangle 1
     float a, b, c, d, e, f, x0, x1, y0, y1;
     compute_intervals(vp0, vp1, vp2, dv0, dv1, dv2, dv0dv1, dv0dv2, a, b, c, x0, x1);
     compute_intervals(up0, up1, up2, du0, du1, du2, du0du1, du0du2, d, e, f, y0, y1);
@@ -221,7 +226,12 @@ void main() {
     }
     // float irr = irr_0 + irr_1;
 
+    // Upright triangle
+    // vec3 v0 = to_world(verts[4]);
+    // vec3 v1 = to_world(verts[5]);
+    // vec3 v2 = to_world(verts[6]);
 
+    // vec3 color = tri_tri_intersect(pos + vec3(-0.01, -0.01, 0.0), l0, l1, v0, v1, v2)/2.0 + vec3(0.5);
     vec3 color = vec3(1.0,0.0,0.0) * irr + vec3(0.0);
 
     outColor = vec4(color,1.0);
