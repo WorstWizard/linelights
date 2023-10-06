@@ -94,7 +94,7 @@ float rand_pcg()
     return float(n) * (1.0/float(0xffffffffU));
 }
 
-const int NUM_SAMPLES = 512;
+const int NUM_SAMPLES = 128;
 float sample_line_light_stochastic(vec3 pos, vec3 n, vec3 l0, vec3 l1, float I) {
     vec3 l_dir = l1 - l0;
 

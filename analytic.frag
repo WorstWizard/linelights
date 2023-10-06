@@ -180,7 +180,7 @@ bool sort2(inout float a, inout float b) {
 bool tri_tri_intersect(
     vec3 v0, vec3 v1, vec3 v2,
     vec3 u0, vec3 u1, vec3 u2,
-    vec3 out0, vec3 out1
+    out vec3 out0, out vec3 out1
 ) {
     // Plane equation 1: dot(n1, x) + d1 = 0
     vec3 e1 = v1 - v0;
@@ -278,7 +278,7 @@ bool tri_tri_intersect(
 
 void main() {
     float I = 1.0;
-    vec3 ambient = vec3(0.0);
+    vec3 ambient = vec3(0.1);
 
     vec3 pos = to_world(inPos);
     vec3 l0 = to_world(l0_ubo);
@@ -293,11 +293,20 @@ void main() {
 
     vec3 is0, is1;
     float irr = 1.0;
+    vec3 color;
     if (tri_tri_intersect(pos + vec3(-0.01, -0.01, 0.0), l0, l1, v0, v1, v2, is0, is1)) {
-        irr = 1.0 - clamp(length(is1 - is0), 0.0, 1.0);
+        // irr = 1.0 - clamp(length(is1 - is0), 0.0, 1.0);
+        color = vec3(0.5,0.0,0.0);
+        // irr = -1.0;
+    } else {
+        irr = sample_line_light_analytic(pos, vec3(0.0,-1.0,0.0), l0, l1, I);
+        color = irr * vec3(1.0);
+        // irr *= 10.0;
+        // irr = irr - fract(irr);
+        // irr /= 10.0;
     }
 
-    vec3 color = irr * vec3(1.0,1.0,1.0) + ambient;
+    // vec3 color = irr * vec3(1.0,1.0,1.0) + ambient;
 
     outColor = vec4(color,1.0);
 }
