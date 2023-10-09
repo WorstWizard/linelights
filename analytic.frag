@@ -2,6 +2,8 @@
 #extension GL_EXT_scalar_block_layout : enable
 
 layout(location = 0) in vec3 inPos;
+layout(location = 1) in vec3 inNormal;
+
 layout(location = 0) out vec4 outColor;
 
 layout(binding = 0) uniform UBO {
@@ -12,8 +14,12 @@ layout(binding = 0) uniform UBO {
     vec4 l1_ubo;
 };
 
+struct Vertex {
+    vec3 pos;
+    vec3 normal;
+};
 layout(scalar, binding = 2) readonly buffer vertexBuffer {
-    vec3 verts[];
+    Vertex verts[];
 };
 layout(binding = 3) readonly buffer indexBuffer {
     uint indices[];
@@ -59,7 +65,6 @@ float sample_line_light_analytic(vec3 pos, vec3 n, vec3 l0, vec3 l1, float I) {
     A = dot(l0, n);
     B = dot(ld, n);
 
-    // TODO: C, D and E can be computed on a per-light basis, rather than per-fragment
     C = dot(l0, l0);
     D = dot(ld, l0)*2.0;
     E = dot(ld, ld);
@@ -216,22 +221,34 @@ bool tri_tri_intersect(
     if (dv0dv1 > 0.0 && dv0dv2 > 0.0) return false;
 
     // Compute intersection line direction
-    vec3 dir = cross(n1,n2);
+    // vec3 dir = cross(n1,n2);
+    
+    // Test: Using direction of |l1-l0| instead, which are currently args v2 and v1
+    vec3 dir = normalize(v2 - v1);
 
     // Simplified projection onto line
     // Pick out largest component of d
-    float max_comp = abs(dir.x);
-    int i = 0;
-    if (abs(dir.y) > max_comp) { max_comp = abs(dir.y); i = 1; }
-    if (abs(dir.z) > max_comp) { max_comp = abs(dir.z); i = 2; }
+    // float max_comp = abs(dir.x);
+    // int i = 0;
+    // if (abs(dir.y) > max_comp) { max_comp = abs(dir.y); i = 1; }
+    // if (abs(dir.z) > max_comp) { max_comp = abs(dir.z); i = 2; }
 
-    float vp0 = v0[i];
-    float vp1 = v1[i];
-    float vp2 = v2[i];
+    // float vp0 = v0[i];
+    // float vp1 = v1[i];
+    // float vp2 = v2[i];
 
-    float up0 = u0[i];
-    float up1 = u1[i];
-    float up2 = u2[i];
+    // float up0 = u0[i];
+    // float up1 = u1[i];
+    // float up2 = u2[i];
+
+    // Test: Projection onto |l1-l0| instead
+    float vp0 = dot(dir, v0);
+    float vp1 = dot(dir, v1);
+    float vp2 = dot(dir, v2);
+
+    float up0 = dot(dir, u0);
+    float up1 = dot(dir, u1);
+    float up2 = dot(dir, u2);
 
     // // Compute intervals
     float isect0_0, isect0_1, isect1_0, isect1_1;
@@ -260,7 +277,7 @@ bool tri_tri_intersect(
             if (smallest0) out1 = isect_pt_A1; else out1 = isect_pt_A0;
         }
     } else {
-        if (smallest1) out0 = isect_pt_B0; else out1 = isect_pt_B1;
+        if (smallest1) out0 = isect_pt_B0; else out0 = isect_pt_B1;
         if (isect1_1 > isect0_1) {
             if (smallest0) out1 = isect_pt_A1; else out1 = isect_pt_A0;
         } else {
@@ -284,29 +301,22 @@ void main() {
     vec3 l0 = to_world(l0_ubo);
     vec3 l1 = to_world(l1_ubo);
 
-    // float irr = sample_line_light(pos, vec3(0.0,-1.0,0.0), l0, l1, I);
-    // float irr = sample_line_light_analytic(pos, vec3(0.0,-1.0,0.0), l0, l1, I);
-
-    vec3 v0 = to_world(verts[4]);
-    vec3 v1 = to_world(verts[5]);
-    vec3 v2 = to_world(verts[6]);
+    vec3 v0 = to_world(verts[4].pos);
+    vec3 v1 = to_world(verts[5].pos);
+    vec3 v2 = to_world(verts[6].pos);
 
     vec3 is0, is1;
-    float irr = 1.0;
-    vec3 color;
-    if (tri_tri_intersect(pos + vec3(-0.01, -0.01, 0.0), l0, l1, v0, v1, v2, is0, is1)) {
-        // irr = 1.0 - clamp(length(is1 - is0), 0.0, 1.0);
-        color = vec3(0.5,0.0,0.0);
-        // irr = -1.0;
+    float irr;
+    if (tri_tri_intersect(pos + to_world(vec3(-0.01, -0.01, 0.0)), l0, l1, v0, v1, v2, is0, is1)) {
+        // irr = (length(l1 - l0) - length(is1 - is0))/length(l1 - l0);
+        // irr = length(is1 - is0);
+        irr = 0.0;
     } else {
-        irr = sample_line_light_analytic(pos, vec3(0.0,-1.0,0.0), l0, l1, I);
-        color = irr * vec3(1.0);
-        // irr *= 10.0;
-        // irr = irr - fract(irr);
-        // irr /= 10.0;
+        irr = sample_line_light_analytic(pos, normalize(to_world(inNormal)), l0, l1, I);
+        // irr = 0.0;
     }
 
-    // vec3 color = irr * vec3(1.0,1.0,1.0) + ambient;
+    vec3 color = irr * vec3(1.0) + ambient;
 
     outColor = vec4(color,1.0);
 }

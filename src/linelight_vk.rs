@@ -26,6 +26,7 @@ fn load_test_scene() -> (Model, Model, Model) {
     let mut plane = MaybeUninit::<Model>::uninit();
     let mut triangle = MaybeUninit::<Model>::uninit();
     let mut line = MaybeUninit::<Model>::uninit();
+
     for m in models.drain(..) {
         match m.name.as_str() {
             "Plane" => {
@@ -48,6 +49,13 @@ fn load_test_scene() -> (Model, Model, Model) {
             line.assume_init(),
         )
     }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Vertex {
+    position: Vec3,
+    normal: Vec3
 }
 
 #[repr(C)]
@@ -108,12 +116,20 @@ pub fn make_custom_app(
     println!("Loading model...");
     let (plane, triangle, line) = load_test_scene();
 
-    let verts = [
+    let normals = [
+        vec![unflatten_positions(plane.mesh.normals)[0]; plane.mesh.positions.len() / 3],
+        vec![-unflatten_positions(triangle.mesh.normals)[0]; triangle.mesh.positions.len() / 3], // Negated because triangle faces wrong direction
+    ].concat();
+    let positions = [
         unflatten_positions(plane.mesh.positions),
         unflatten_positions(triangle.mesh.positions),
     ]
     .concat();
+
+    let verts: Vec<Vertex> = positions.into_iter().zip(normals).map(|(p, n)| Vertex {position: p, normal: n}).collect();
+
     let num_verts = verts.len();
+
     // let plane_indices = indices_to_u16(plane.mesh.indices);
     let plane_indices = plane.mesh.indices;
     // let triangle_indices: Vec<u16> = indices_to_u16(triangle.mesh.indices)
@@ -137,18 +153,23 @@ pub fn make_custom_app(
             .binding(0)
             .location(0)
             .format(vk::Format::R32G32B32_SFLOAT)
-            .offset(0)],
+            .offset(0),
+        *vk::VertexInputAttributeDescription::builder()
+            .binding(0)
+            .location(1)
+            .format(vk::Format::R32G32B32_SFLOAT)
+            .offset(std::mem::size_of::<Vec3>() as u32)],
         bindings: vec![*vk::VertexInputBindingDescription::builder()
             .binding(0)
             .input_rate(vk::VertexInputRate::VERTEX)
-            .stride(std::mem::size_of::<Vec3>() as u32)],
+            .stride(std::mem::size_of::<Vertex>() as u32)],
     };
 
     println!("Setting up window...");
     let (window, event_loop) = vk_engine::init_window(APP_NAME, 800, 600);
 
     println!("Initializing application...");
-    let mut app = BaseApp::new::<Vec3, u32, LineLightUniform>(
+    let mut app = BaseApp::new::<Vertex, u32, LineLightUniform>(
         window,
         APP_NAME,
         &shaders,
@@ -227,7 +248,7 @@ pub fn make_custom_app(
     // *app.texture = new_texture;
 
     // Update descriptors
-    app.update_descriptor_sets::<LineLightUniform, Vec3, u32>(num_verts as u64, num_indices as u64);
+    app.update_descriptor_sets::<LineLightUniform, Vertex, u32>(num_verts as u64, num_indices as u64);
 
     (app, event_loop, vid, num_indices, (l0, l1))
 }
