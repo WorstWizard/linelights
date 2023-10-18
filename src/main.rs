@@ -15,7 +15,7 @@ fn main() {
     let mut timer = std::time::Instant::now();
     let mut theta = 0.0;
 
-    const ROT_P_SEC: f32 = 0.0;
+    const ROT_P_SEC: f32 = -0.01;
     const TWO_PI: f32 = 2.0 * 3.1415926535;
 
     event_loop.run(move |event, _, control_flow| {
