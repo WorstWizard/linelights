@@ -83,7 +83,7 @@ fn main() {
                     );
 
                     app.record_command_buffer(current_frame, |app| {
-                        drawing_commands(app, current_frame, img_index)
+                        drawing_commands(app, current_frame, img_index, num_indices)
                     })
                 }
 
@@ -109,6 +109,7 @@ pub fn drawing_commands(
     app: &mut linelight_vk::LineLightApp,
     buffer_index: usize,
     swapchain_image_index: u32,
+    num_indices: u32,
 ) {
     //Start render pass
     let render_area = vk::Rect2D::builder()
@@ -160,7 +161,14 @@ pub fn drawing_commands(
         );
 
         // Drawing commands begin
-
+        app.logical_device.cmd_draw_indexed(
+            app.command_buffers[buffer_index],
+            num_indices,
+            1,
+            0,
+            0,
+            0
+        );
         // Drawing commands end
 
         //End the render pass

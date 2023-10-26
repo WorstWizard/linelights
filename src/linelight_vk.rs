@@ -2,11 +2,13 @@ use ash::extensions::ext::DebugUtils;
 use ash::extensions::khr::{Surface, Swapchain};
 use ash::vk;
 use glam::{vec3, Vec3, Vec4};
+use std::ffi::{CStr, c_char};
 use std::mem::ManuallyDrop;
 use std::{mem::MaybeUninit, ffi::CString};
 use std::rc::Rc;
 use tobj::{self, Model};
 use vk_engine::{engine_core, shaders};
+use cstr::cstr;
 
 static APP_NAME: &str = "Linelight Experiments";
 
@@ -110,13 +112,6 @@ pub fn make_ubo_bindings() -> Vec<vk::DescriptorSetLayoutBinding> {
     );
     binding_vec.push(
         *vk::DescriptorSetLayoutBinding::builder()
-            .binding(1)
-            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-            .descriptor_count(1)
-            .stage_flags(vk::ShaderStageFlags::FRAGMENT),
-    );
-    binding_vec.push(
-        *vk::DescriptorSetLayoutBinding::builder()
             .binding(2)
             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
             .descriptor_count(1)
@@ -184,6 +179,8 @@ pub fn make_custom_app(
         &indices,
     );
 
+    app.update_descriptor_sets(num_verts as u64, num_indices as u64);
+
     (app, event_loop, vid, num_indices, (l0, l1))
 }
 
@@ -202,12 +199,12 @@ pub struct LineLightApp {
     depth_image: ManuallyDrop<engine_core::ManagedImage>,
     pub descriptor_sets: Vec<vk::DescriptorSet>,
     descriptor_set_layout: vk::DescriptorSetLayout,
-    descriptor_pool: vk::DescriptorPool,
+    _descriptor_pool: vk::DescriptorPool,
     pub framebuffers: Vec<vk::Framebuffer>,
     present_queue: vk::Queue,
     graphics_queue: vk::Queue,
     pub command_buffers: Vec<vk::CommandBuffer>,
-    command_pool: vk::CommandPool,
+    _command_pool: vk::CommandPool,
     pub uniform_buffers: Vec<vk_engine::engine_core::ManagedBuffer>,
     pub sync: engine_core::SyncPrims,
     surface_loader: ash::extensions::khr::Surface,
@@ -216,6 +213,10 @@ pub struct LineLightApp {
     pub logical_device: Rc<ash::Device>,
     instance: Box<ash::Instance>,
 }
+
+type VertexType = Vertex;
+type IndexType = u32;
+type UBOType = LineLightUniform;
 impl LineLightApp {
     pub fn new(
         window: winit::window::Window,
@@ -225,11 +226,6 @@ impl LineLightApp {
         vertices: &Vec<Vertex>,
         indices: &Vec<u32>
     ) -> Self {
-        
-        type VertexType = Vertex;
-        type IndexType = u32;
-        type UBOType = LineLightUniform;
-
         let entry = Box::new(unsafe { ash::Entry::load() }.unwrap());
         if engine_core::VALIDATION_ENABLED && !engine_core::check_validation_layer_support(&entry) {
             panic!("Validation layer requested but not available!");
@@ -241,10 +237,10 @@ impl LineLightApp {
 
         let app_info = vk::ApplicationInfo::builder()
             .application_name(&app_name)
-            .application_version(vk::make_api_version(0, 1, 0, 0))
+            .application_version(vk::make_api_version(0, 1, 1, 0))
             .engine_name(&engine_name)
-            .engine_version(vk::API_VERSION_1_0)
-            .api_version(vk::API_VERSION_1_0);
+            .engine_version(vk::API_VERSION_1_2)
+            .api_version(vk::API_VERSION_1_2);
 
         let mut instance_extensions =
             ash_window::enumerate_required_extensions(window.raw_display_handle())
@@ -329,7 +325,7 @@ impl LineLightApp {
 
         //// Graphics pipeline
         let (graphics_pipeline, graphics_pipeline_layout, descriptor_set_layout, render_pass) =
-            engine_core::create_graphics_pipeline(
+            graphics_pipeline(
                 &logical_device,
                 swapchain_extent,
                 image_format,
@@ -513,7 +509,7 @@ impl LineLightApp {
 
         LineLightApp {
             command_buffers,
-            command_pool,
+            _command_pool: command_pool,
             uniform_buffers,
             graphics_queue,
             logical_device,
@@ -526,7 +522,7 @@ impl LineLightApp {
             vertex_buffer: ManuallyDrop::new(vertex_buffer),
             descriptor_set_layout,
             descriptor_sets,
-            descriptor_pool,
+            _descriptor_pool: descriptor_pool,
             framebuffers,
             graphics_pipeline,
             graphics_pipeline_layout,
@@ -621,6 +617,51 @@ impl LineLightApp {
                 .queue_present(self.present_queue, &present_info)
         }
     }
+    pub fn update_descriptor_sets(&self, num_verts: u64, num_indices: u64) {
+        let descriptor_writes = {
+            let mut v = Vec::with_capacity(self.descriptor_sets.len());
+            for (i, set) in self.descriptor_sets.iter().enumerate() {
+                let descriptor_buffer_info = [*vk::DescriptorBufferInfo::builder()
+                    .buffer(*self.uniform_buffers[i])
+                    .offset(0)
+                    .range(std::mem::size_of::<UBOType>() as u64)];
+                let descriptor_reused_vert_buffer_info = [*vk::DescriptorBufferInfo::builder()
+                    .buffer(**self.vertex_buffer)
+                    .offset(0)
+                    .range(std::mem::size_of::<VertexType>() as u64 * num_verts)];
+                let descriptor_reused_index_buffer_info = [*vk::DescriptorBufferInfo::builder()
+                    .buffer(**self.index_buffer)
+                    .offset(0)
+                    .range(std::mem::size_of::<IndexType>() as u64 * num_indices)];
+                v.push(
+                    *vk::WriteDescriptorSet::builder()
+                        .dst_set(*set)
+                        .dst_binding(0)
+                        .dst_array_element(0)
+                        .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+                        .buffer_info(&descriptor_buffer_info),
+                );
+                v.push(
+                    *vk::WriteDescriptorSet::builder()
+                        .dst_set(*set)
+                        .dst_binding(2)
+                        .dst_array_element(0)
+                        .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                        .buffer_info(&descriptor_reused_vert_buffer_info),
+                );
+                v.push(
+                    *vk::WriteDescriptorSet::builder()
+                        .dst_set(*set)
+                        .dst_binding(3)
+                        .dst_array_element(0)
+                        .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                        .buffer_info(&descriptor_reused_index_buffer_info),
+                );
+            }
+            v
+        };
+        unsafe { self.logical_device.update_descriptor_sets(&descriptor_writes, &[]) }
+    }
 
     pub fn recreate_swapchain(
         &mut self,
@@ -650,7 +691,7 @@ impl LineLightApp {
             image_format,
         );
         let (graphics_pipeline, graphics_pipeline_layout, descriptor_set_layout, render_pass) =
-            engine_core::create_graphics_pipeline(
+            graphics_pipeline(
                 &self.logical_device,
                 swapchain_extent,
                 image_format,
@@ -707,4 +748,245 @@ impl LineLightApp {
         self.swapchain_loader
             .destroy_swapchain(self.swapchain, None);
     }
+}
+
+pub fn graphics_pipeline(
+    logical_device: &ash::Device,
+    swapchain_extent: vk::Extent2D,
+    image_format: vk::Format,
+    shaders: &Vec<shaders::Shader>,
+    vertex_input_descriptors: &vk_engine::VertexInputDescriptors,
+    descriptor_set_bindings: Vec<vk::DescriptorSetLayoutBinding>,
+    push_constants: [f32; 1],
+) -> (
+    vk::Pipeline,
+    vk::PipelineLayout,
+    vk::DescriptorSetLayout,
+    vk::RenderPass,
+) {
+    let render_pass = render_pass(logical_device, image_format);
+
+    let pipeline = pipeline(
+        logical_device,
+        render_pass,
+        swapchain_extent,
+        shaders,
+        vertex_input_descriptors,
+        descriptor_set_bindings,
+        push_constants,
+    );
+    (pipeline.0, pipeline.1, pipeline.2, render_pass)
+}
+
+fn render_pass(logical_device: &ash::Device, image_format: vk::Format) -> vk::RenderPass {
+    let color_attachments = [*vk::AttachmentDescription::builder()
+        .format(image_format)
+        .samples(vk::SampleCountFlags::TYPE_1)
+        .load_op(vk::AttachmentLoadOp::CLEAR)
+        .store_op(vk::AttachmentStoreOp::STORE)
+        .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+        .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+        .initial_layout(vk::ImageLayout::UNDEFINED)
+        .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)];
+    let depth_attachments = [*vk::AttachmentDescription::builder()
+        .format(vk::Format::D32_SFLOAT)
+        .samples(vk::SampleCountFlags::TYPE_1)
+        .load_op(vk::AttachmentLoadOp::CLEAR)
+        .store_op(vk::AttachmentStoreOp::DONT_CARE)
+        .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+        .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+        .initial_layout(vk::ImageLayout::UNDEFINED)
+        .final_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)];
+    let attachments = [color_attachments, depth_attachments].concat();
+    // Subpass
+    let dependencies = [*vk::SubpassDependency::builder()
+        .src_subpass(vk::SUBPASS_EXTERNAL)
+        .dst_subpass(0)
+        .src_stage_mask(
+            vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
+                | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS,
+        )
+        .src_access_mask(vk::AccessFlags::empty())
+        .dst_stage_mask(
+            vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
+                | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS,
+        )
+        .dst_access_mask(
+            vk::AccessFlags::COLOR_ATTACHMENT_WRITE
+                | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
+        )];
+    let color_attachment_refs = [*vk::AttachmentReference::builder()
+        .attachment(0) //First attachment in array -> color_attachment
+        .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)];
+    let depth_attachment_ref = vk::AttachmentReference::builder()
+        .attachment(1)
+        .layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+    let subpasses = [*vk::SubpassDescription::builder()
+        .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
+        .color_attachments(&color_attachment_refs)
+        .depth_stencil_attachment(&depth_attachment_ref)];
+
+    let renderpass_info = vk::RenderPassCreateInfo::builder()
+        .attachments(&attachments)
+        .subpasses(&subpasses)
+        .dependencies(&dependencies);
+
+    unsafe { logical_device.create_render_pass(&renderpass_info, None) }
+        .expect("Failed to create renderpass!")
+}
+
+fn pipeline(
+    logical_device: &ash::Device,
+    render_pass: vk::RenderPass,
+    swapchain_extent: vk::Extent2D,
+    shaders: &Vec<shaders::Shader>,
+    vertex_input_descriptors: &vk_engine::VertexInputDescriptors,
+    descriptor_set_bindings: Vec<vk::DescriptorSetLayoutBinding>,
+    push_constants: [f32; 1],
+) -> (vk::Pipeline, vk::PipelineLayout, vk::DescriptorSetLayout) {
+    // Vertex input settings
+    let binding_descriptions = &vertex_input_descriptors.bindings;
+    let attribute_descriptions = &vertex_input_descriptors.attributes;
+    let pipeline_vertex_input_state_info = vk::PipelineVertexInputStateCreateInfo::builder()
+        .vertex_binding_descriptions(binding_descriptions.as_slice())
+        .vertex_attribute_descriptions(attribute_descriptions.as_slice());
+    // Input assembly settings
+    let pipeline_input_assembly_state_info = vk::PipelineInputAssemblyStateCreateInfo::builder()
+        .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+        .primitive_restart_enable(false);
+    // Viewport settings
+    let viewports = [*vk::Viewport::builder()
+        .x(0.0)
+        .y(0.0)
+        .width(swapchain_extent.width as f32)
+        .height(swapchain_extent.height as f32)
+        .min_depth(0.0)
+        .max_depth(1.0)];
+    let scissor_rects = [*vk::Rect2D::builder()
+        .offset(vk::Offset2D { x: 0, y: 0 })
+        .extent(swapchain_extent)];
+    let pipeline_viewport_state_info = vk::PipelineViewportStateCreateInfo::builder()
+        .viewports(&viewports)
+        .scissors(&scissor_rects);
+    // Rasterizer settings
+    let pipeline_rasterization_state_info = vk::PipelineRasterizationStateCreateInfo::builder()
+        .depth_clamp_enable(false)
+        .rasterizer_discard_enable(false)
+        .polygon_mode(vk::PolygonMode::FILL)
+        .line_width(1.0)
+        .cull_mode(vk::CullModeFlags::NONE)
+        .front_face(vk::FrontFace::COUNTER_CLOCKWISE)
+        .depth_bias_enable(false);
+    // Multisampling settings
+    let pipeline_multisample_state_info = vk::PipelineMultisampleStateCreateInfo::builder()
+        .sample_shading_enable(false)
+        .rasterization_samples(vk::SampleCountFlags::TYPE_1);
+    // Color blending settings
+    let pipeline_color_blend_attachment_states =
+        [*vk::PipelineColorBlendAttachmentState::builder()
+            .color_write_mask(
+                vk::ColorComponentFlags::R
+                    | vk::ColorComponentFlags::G
+                    | vk::ColorComponentFlags::B
+                    | vk::ColorComponentFlags::A,
+            )
+            .blend_enable(false)];
+    let pipeline_color_blend_state_info = vk::PipelineColorBlendStateCreateInfo::builder()
+        .logic_op_enable(false)
+        .attachments(&pipeline_color_blend_attachment_states);
+
+    // Descriptor set layout
+    let descriptor_set_layout = {
+        let descriptor_set_layout_info =
+            vk::DescriptorSetLayoutCreateInfo::builder().bindings(&descriptor_set_bindings);
+
+        unsafe { logical_device.create_descriptor_set_layout(&descriptor_set_layout_info, None) }
+            .unwrap()
+    };
+
+    // Pipeline layout
+    let push_constant_ranges = [*vk::PushConstantRange::builder()
+        .stage_flags(vk::ShaderStageFlags::VERTEX)
+        .offset(0)
+        .size((push_constants.len() * std::mem::size_of::<f32>()) as u32)];
+
+    let mut pipeline_layout_info =
+        vk::PipelineLayoutCreateInfo::builder().push_constant_ranges(&push_constant_ranges);
+    let pipeline_layout = {
+        let layout = [descriptor_set_layout];
+        pipeline_layout_info = pipeline_layout_info.set_layouts(&layout);
+        unsafe { logical_device.create_pipeline_layout(&pipeline_layout_info, None) }.unwrap()
+    };
+
+    let shader_module_vec = shaders
+        .iter()
+        .map(|shader| create_shader_module(logical_device, shader))
+        .collect::<Vec<(vk::ShaderModule, vk::PipelineShaderStageCreateInfo)>>();
+    let shader_modules = shader_module_vec.as_slice();
+
+    let shader_stages: Vec<vk::PipelineShaderStageCreateInfo> =
+        shader_modules.iter().map(|pair| pair.1).collect();
+
+    let depth_stencil_info = vk::PipelineDepthStencilStateCreateInfo::builder()
+        .depth_test_enable(true)
+        .depth_write_enable(true)
+        .depth_compare_op(vk::CompareOp::LESS)
+        .depth_bounds_test_enable(false)
+        .min_depth_bounds(0.0)
+        .max_depth_bounds(1.0)
+        .stencil_test_enable(false);
+
+    let graphics_pipeline_infos = [*vk::GraphicsPipelineCreateInfo::builder()
+        .stages(&shader_stages)
+        .vertex_input_state(&pipeline_vertex_input_state_info)
+        .input_assembly_state(&pipeline_input_assembly_state_info)
+        .viewport_state(&pipeline_viewport_state_info)
+        .rasterization_state(&pipeline_rasterization_state_info)
+        .multisample_state(&pipeline_multisample_state_info)
+        .color_blend_state(&pipeline_color_blend_state_info)
+        .depth_stencil_state(&depth_stencil_info)
+        .layout(pipeline_layout)
+        .render_pass(render_pass)
+        .subpass(0)];
+    let graphics_pipeline = unsafe {
+        logical_device.create_graphics_pipelines(
+            vk::PipelineCache::null(),
+            &graphics_pipeline_infos,
+            None,
+        )
+    }
+    .unwrap()[0];
+
+    //Once the graphics pipeline has been created, the SPIR-V bytecode is compiled into the pipeline itself
+    //The shader modules can therefore already be destroyed
+    unsafe {
+        for module in shader_modules {
+            logical_device.destroy_shader_module(module.0, None)
+        }
+    }
+
+    (graphics_pipeline, pipeline_layout, descriptor_set_layout)
+}
+
+const DEFAULT_ENTRY: *const c_char = cstr!("main").as_ptr();
+fn create_shader_module(
+    logical_device: &ash::Device,
+    shader: &shaders::Shader,
+) -> (vk::ShaderModule, vk::PipelineShaderStageCreateInfo) {
+    let entry_point = unsafe { CStr::from_ptr(DEFAULT_ENTRY) };
+    let shader_stage_flag = match shader.shader_type {
+        shaders::ShaderType::Vertex => vk::ShaderStageFlags::VERTEX,
+        shaders::ShaderType::Fragment => vk::ShaderStageFlags::FRAGMENT,
+    };
+
+    let decoded = &shader.data;
+    let shader_module_info = vk::ShaderModuleCreateInfo::builder().code(decoded);
+    let shader_module =
+        unsafe { logical_device.create_shader_module(&shader_module_info, None) }.unwrap();
+    let stage_info = vk::PipelineShaderStageCreateInfo::builder()
+        .stage(shader_stage_flag)
+        .module(shader_module)
+        .name(entry_point);
+
+    (shader_module, *stage_info)
 }
