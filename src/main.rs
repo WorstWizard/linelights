@@ -9,7 +9,9 @@ mod linelight_vk;
 fn main() {
     let shaders = linelight_vk::make_shaders("simple_shader.vert", "analytic.frag");
     let ubo_bindings = linelight_vk::make_ubo_bindings();
-    let (mut app, event_loop, vid, num_indices, (l0, l1)) = linelight_vk::make_custom_app(&shaders, &ubo_bindings);
+
+    let (mut app, event_loop, vid, num_indices, (l0, l1)) =
+        linelight_vk::make_custom_app(&shaders, &ubo_bindings);
 
     let mut current_frame = 0;
     let mut timer = std::time::Instant::now();
@@ -70,11 +72,7 @@ fn main() {
                     projection,
                 };
 
-                let ubo = linelight_vk::LineLightUniform {
-                    l0,
-                    l1,
-                    mvp,
-                };
+                let ubo = linelight_vk::LineLightUniform { l0, l1, mvp };
 
                 unsafe {
                     write_struct_to_buffer(
@@ -85,23 +83,7 @@ fn main() {
                     );
 
                     app.record_command_buffer(current_frame, |app| {
-                        vk_engine::drawing_commands(
-                            app,
-                            current_frame,
-                            img_index,
-                            |app| {
-                                app.logical_device.cmd_draw_indexed(
-                                    app.command_buffers[current_frame],
-                                    num_indices,
-                                    1,
-                                    0,
-                                    0,
-                                    0,
-                                );
-                            },
-                            &[0.0],
-                            vk::IndexType::UINT32,
-                        )
+                        drawing_commands(app, current_frame, img_index)
                     })
                 }
 
@@ -121,4 +103,68 @@ fn main() {
             _ => (),
         }
     });
+}
+
+pub fn drawing_commands(
+    app: &mut linelight_vk::LineLightApp,
+    buffer_index: usize,
+    swapchain_image_index: u32,
+) {
+    //Start render pass
+    let render_area = vk::Rect2D::builder()
+        .offset(vk::Offset2D { x: 0, y: 0 })
+        .extent(app.swapchain_extent);
+    let mut clear_values = [vk::ClearValue::default(); 2];
+    clear_values[0].color.float32 = [0.0, 0.0, 0.0, 1.0];
+    clear_values[1].depth_stencil = vk::ClearDepthStencilValue {
+        depth: 1.0,
+        stencil: 0,
+    };
+    let renderpass_begin_info = vk::RenderPassBeginInfo::builder()
+        .render_pass(app.render_pass)
+        .framebuffer(app.framebuffers[swapchain_image_index as usize])
+        .render_area(*render_area)
+        .clear_values(&clear_values);
+    unsafe {
+        app.logical_device.cmd_begin_render_pass(
+            app.command_buffers[buffer_index],
+            &renderpass_begin_info,
+            vk::SubpassContents::INLINE,
+        );
+        app.logical_device.cmd_bind_pipeline(
+            app.command_buffers[buffer_index],
+            vk::PipelineBindPoint::GRAPHICS,
+            app.graphics_pipeline,
+        );
+        let vertex_buffers = [app.vertex_buffer.buffer];
+        let offsets = [0];
+        app.logical_device.cmd_bind_vertex_buffers(
+            app.command_buffers[buffer_index],
+            0,
+            &vertex_buffers,
+            &offsets,
+        );
+        app.logical_device.cmd_bind_index_buffer(
+            app.command_buffers[buffer_index],
+            app.index_buffer.buffer,
+            0,
+            vk::IndexType::UINT32,
+        );
+        app.logical_device.cmd_bind_descriptor_sets(
+            app.command_buffers[buffer_index],
+            vk::PipelineBindPoint::GRAPHICS,
+            app.graphics_pipeline_layout,
+            0,
+            &[app.descriptor_sets[buffer_index]],
+            &[],
+        );
+
+        // Drawing commands begin
+
+        // Drawing commands end
+
+        //End the render pass
+        app.logical_device
+            .cmd_end_render_pass(app.command_buffers[buffer_index]);
+    }
 }

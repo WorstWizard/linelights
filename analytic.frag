@@ -398,7 +398,7 @@ bool tri_tri_intersect_custom(
 
 
 void main() {
-    float I = 1.0;
+    float I = 5.0;
     vec3 ambient = vec3(0.0);
 
     vec3 pos = to_world(inPos);
@@ -428,6 +428,7 @@ void main() {
             irr += sample_line_light_analytic(pos, n, is1, l1, I1);
 
         }
+        // irr = abs(interval.y);
     } else {
         irr = sample_line_light_analytic(pos, n, l0, l1, I);
     }
