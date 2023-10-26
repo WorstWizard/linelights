@@ -170,7 +170,7 @@ pub fn make_custom_app(
     let (window, event_loop) = vk_engine::init_window(APP_NAME, 800, 600);
 
     println!("Initializing application...");
-    let mut app = LineLightApp::new(
+    let app = LineLightApp::new(
         window,
         &shaders,
         &vid,

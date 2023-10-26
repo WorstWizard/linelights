@@ -2,22 +2,23 @@
 #extension GL_EXT_scalar_block_layout : enable
 
 layout(location = 0) in vec3 inPos;
+layout(location = 1) in vec3 inNormal;
 layout(location = 0) out vec4 outColor;
-
-struct Line {
-    vec4 l0;
-    vec4 l1;
-};
 
 layout(binding = 0) uniform UBO {
     mat4 model;
     mat4 view;
     mat4 proj;
-    Line light;
+    vec4 l0_ubo;
+    vec4 l1_ubo;
 };
 
+struct Vertex {
+    vec3 pos;
+    vec3 normal;
+};
 layout(scalar, binding = 2) readonly buffer vertexBuffer {
-    vec3 verts[];
+    Vertex verts[];
 };
 layout(binding = 3) readonly buffer indexBuffer {
     uint indices[];
@@ -67,9 +68,9 @@ bool ray_triangle_intersect(Ray r, vec3 v0, vec3 v1, vec3 v2) {
 
 bool intersect_scene(Ray r) {
     for (int i = 0; i < indices.length(); i += 3) {
-        vec3 v0 = to_world(verts[indices[i]]);
-        vec3 v1 = to_world(verts[indices[i+1]]);
-        vec3 v2 = to_world(verts[indices[i+2]]);
+        vec3 v0 = to_world(verts[indices[i]].pos);
+        vec3 v1 = to_world(verts[indices[i+1]].pos);
+        vec3 v2 = to_world(verts[indices[i+2]].pos);
 
         if ( ray_triangle_intersect(r, v0, v1, v2) ) return true;
     }
@@ -122,14 +123,16 @@ float sample_line_light_stochastic(vec3 pos, vec3 n, vec3 l0, vec3 l1, float I) 
 void main() {
     rng_state = hash(uvec2(uint(gl_FragCoord.x),uint(gl_FragCoord.y)));
 
-    float I = 1.0;
-    vec3 ambient = vec3(0.0);
+    float I = 5.0;
+    vec3 ambient = vec3(0.1);
 
     vec3 pos = to_world(inPos);
-    vec3 l0 = to_world(light.l0);
-    vec3 l1 = to_world(light.l1);
+    vec3 l0 = to_world(l0_ubo);
+    vec3 l1 = to_world(l1_ubo);
 
-    float irr = sample_line_light_stochastic(pos, vec3(0.0,-1.0,0.0), l0, l1, I);
+    vec3 n = normalize(to_world(inNormal));
+
+    float irr = sample_line_light_stochastic(pos, n, l0, l1, I);
 
     vec3 color = irr * vec3(1.0,1.0,1.0) + ambient;
     outColor = vec4(color,1.0);

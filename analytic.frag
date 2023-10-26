@@ -399,7 +399,7 @@ bool tri_tri_intersect_custom(
 
 void main() {
     float I = 5.0;
-    vec3 ambient = vec3(0.0);
+    vec3 ambient = vec3(0.1);
 
     vec3 pos = to_world(inPos);
     vec3 l0 = to_world(l0_ubo);
