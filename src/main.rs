@@ -1,5 +1,5 @@
 use ash::vk;
-use glam::{vec3, Mat4};
+use glam::{vec3, Mat4, Vec4Swizzles};
 use vk_engine::engine_core::{write_struct_to_buffer, write_vec_to_buffer};
 use winit::event::{Event, VirtualKeyCode, WindowEvent};
 use winit::event_loop::ControlFlow;
@@ -22,10 +22,8 @@ fn main() {
     const TWO_PI: f32 = 2.0 * 3.1415926535;
 
     let debug_verts = vec![
-        vec3(-5.0, 0.0, -5.0),
-        vec3(5.0, 0.0, 5.0),
-        vec3(-5.0, -1.0, 5.0),
-        vec3(5.0, -1.0, -5.0),
+        l0.xyz(),
+        l1.xyz(),
     ];
 
     unsafe {
