@@ -1,6 +1,6 @@
 use ash::vk;
 use glam::{vec3, Mat4};
-use vk_engine::engine_core::write_struct_to_buffer;
+use vk_engine::engine_core::{write_struct_to_buffer, write_vec_to_buffer};
 use winit::event::{Event, VirtualKeyCode, WindowEvent};
 use winit::event_loop::ControlFlow;
 
@@ -8,10 +8,11 @@ mod linelight_vk;
 
 fn main() {
     let shaders = linelight_vk::make_shaders("simple_shader.vert", "analytic.frag");
+    let debug_shaders = linelight_vk::make_shaders("debugger.vert", "debugger.frag");
     let ubo_bindings = linelight_vk::make_ubo_bindings();
 
     let (mut app, event_loop, vid, num_indices, (l0, l1)) =
-        linelight_vk::make_custom_app(&shaders, &ubo_bindings);
+        linelight_vk::make_custom_app(&shaders, &debug_shaders, &ubo_bindings);
 
     let mut current_frame = 0;
     let mut timer = std::time::Instant::now();
@@ -19,6 +20,22 @@ fn main() {
 
     const ROT_P_SEC: f32 = -0.01;
     const TWO_PI: f32 = 2.0 * 3.1415926535;
+
+    let debug_verts = vec![
+        vec3(-5.0, 0.0, -5.0),
+        vec3(5.0, 0.0, 5.0),
+        vec3(-5.0, -1.0, 5.0),
+        vec3(5.0, -1.0, -5.0),
+    ];
+
+    unsafe {
+        write_vec_to_buffer(
+            app.debug_buffer
+                .memory_ptr
+                .expect("Uniform buffer not mapped!"),
+            &debug_verts,
+        );
+    }
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
@@ -37,7 +54,7 @@ fn main() {
 
                 let img_index = match app.acquire_next_image(current_frame) {
                     Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
-                        app.recreate_swapchain(&shaders, &vid, ubo_bindings.clone());
+                        app.recreate_swapchain(&shaders, &debug_shaders, &vid, ubo_bindings.clone());
                         return;
                     }
                     Ok((i, _)) => i, // Swapchain may be suboptimal, but it's easier to just proceed
@@ -82,8 +99,9 @@ fn main() {
                         &ubo as *const linelight_vk::LineLightUniform,
                     );
 
+
                     app.record_command_buffer(current_frame, |app| {
-                        drawing_commands(app, current_frame, img_index, num_indices)
+                        drawing_commands(app, current_frame, img_index, num_indices, debug_verts.len() as u32);
                     })
                 }
 
@@ -91,7 +109,7 @@ fn main() {
 
                 match app.present_image(img_index, app.sync.render_finished[current_frame]) {
                     Ok(true) | Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
-                        app.recreate_swapchain(&shaders, &vid, ubo_bindings.clone())
+                        app.recreate_swapchain(&shaders, &debug_shaders, &vid, ubo_bindings.clone())
                     }
                     Ok(false) => (),
                     _ => panic!("Could not present image!"),
@@ -110,6 +128,7 @@ pub fn drawing_commands(
     buffer_index: usize,
     swapchain_image_index: u32,
     num_indices: u32,
+    num_debug_verts: u32,
 ) {
     //Start render pass
     let render_area = vk::Rect2D::builder()
@@ -167,7 +186,27 @@ pub fn drawing_commands(
             1,
             0,
             0,
-            0
+            0,
+        );
+        // Debug drawing subpass
+        app.logical_device.cmd_next_subpass(app.command_buffers[buffer_index], vk::SubpassContents::INLINE);
+        app.logical_device.cmd_bind_vertex_buffers(
+            app.command_buffers[buffer_index],
+            0,
+            &[app.debug_buffer.buffer],
+            &[0],
+        );
+        app.logical_device.cmd_bind_pipeline(
+            app.command_buffers[buffer_index],
+            vk::PipelineBindPoint::GRAPHICS,
+            app.debug_pipeline,
+        );
+        app.logical_device.cmd_draw(
+            app.command_buffers[buffer_index],
+            num_debug_verts,
+            1,
+            0,
+            0,
         );
         // Drawing commands end
 
