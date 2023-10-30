@@ -528,9 +528,17 @@ impl LineLightApp {
 
         //// Descriptor pool
         let descriptor_pool = {
-            let pool_sizes = [*vk::DescriptorPoolSize::builder()
-                .ty(vk::DescriptorType::UNIFORM_BUFFER)
-                .descriptor_count(engine_core::MAX_FRAMES_IN_FLIGHT as u32)];
+            let pool_sizes = [
+                *vk::DescriptorPoolSize::builder()
+                    .ty(vk::DescriptorType::UNIFORM_BUFFER)
+                    .descriptor_count(engine_core::MAX_FRAMES_IN_FLIGHT as u32),
+                *vk::DescriptorPoolSize::builder()
+                    .ty(vk::DescriptorType::STORAGE_BUFFER)
+                    .descriptor_count(engine_core::MAX_FRAMES_IN_FLIGHT as u32),
+                *vk::DescriptorPoolSize::builder()
+                    .ty(vk::DescriptorType::STORAGE_BUFFER)
+                    .descriptor_count(engine_core::MAX_FRAMES_IN_FLIGHT as u32)
+            ];
             let pool_info = vk::DescriptorPoolCreateInfo::builder()
                 .pool_sizes(&pool_sizes)
                 .max_sets(engine_core::MAX_FRAMES_IN_FLIGHT as u32);
