@@ -1,7 +1,7 @@
 use ash::vk;
-use glam::{vec3, Mat4, Vec4Swizzles};
+use glam::{vec3, Mat4, Vec4Swizzles, vec2, vec4, Vec4};
 use vk_engine::engine_core::{write_struct_to_buffer, write_vec_to_buffer};
-use winit::event::{Event, VirtualKeyCode, WindowEvent};
+use winit::event::{Event, VirtualKeyCode, WindowEvent, ElementState};
 use winit::event_loop::ControlFlow;
 
 mod linelight_vk;
@@ -21,11 +21,11 @@ fn main() {
     const ROT_P_SEC: f32 = -0.01;
     const TWO_PI: f32 = 2.0 * 3.1415926535;
 
+    // Stuff for debugging overlay
     let debug_verts = vec![
         l0.xyz(),
         l1.xyz(),
     ];
-
     unsafe {
         write_vec_to_buffer(
             app.debug_buffer
@@ -34,6 +34,12 @@ fn main() {
             &debug_verts,
         );
     }
+    let mut mouse_clicked_this_frame = true;
+    let mut mouse_position = vec2(0.0, 0.0);
+
+    let mut model = Mat4::IDENTITY;
+    let mut view = Mat4::IDENTITY;
+    let mut projection = Mat4::IDENTITY;
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
@@ -45,6 +51,25 @@ fn main() {
                     Some(VirtualKeyCode::Escape) => *control_flow = ControlFlow::Exit,
                     _ => (),
                 },
+                WindowEvent::CursorMoved { position, .. } => {
+                    mouse_position.x = position.x as f32;
+                    mouse_position.y = position.y as f32;
+                },
+                WindowEvent::MouseInput { state, button: winit::event::MouseButton::Left, .. } => match state {
+                    ElementState::Pressed => {
+                        if mouse_clicked_this_frame {
+                            let normalized_window_coord = 2.0 * mouse_position * vec2(1.0/app.swapchain_extent.width as f32, 1.0/app.swapchain_extent.height as f32) - vec2(1.0, 1.0);
+                            // println!("Window coords: {}", normalized_window_coord);
+                            let inverse_mat = (projection.mul_mat4(&view.mul_mat4(&model))).inverse();
+                            let point_in_object_space = inverse_mat.mul_vec4(vec4(normalized_window_coord.x, normalized_window_coord.y, 0.0, 1.0));
+                            println!("{}", point_in_object_space * Vec4::splat(1.0/point_in_object_space.w));
+                        }
+                        mouse_clicked_this_frame = false;
+                    }
+                    ElementState::Released => {
+                        mouse_clicked_this_frame = true;
+                    }
+                }
                 _ => (),
             },
             Event::MainEventsCleared => {
@@ -70,13 +95,13 @@ fn main() {
 
                 theta = (theta + (ROT_P_SEC * TWO_PI) * timer.elapsed().as_secs_f32()) % TWO_PI;
 
-                let model = Mat4::from_scale_rotation_translation(
+                model = Mat4::from_scale_rotation_translation(
                     vec3(model_scale, -model_scale, model_scale),
                     glam::Quat::from_rotation_y(theta),
                     model_pos,
                 );
-                let view = Mat4::look_at_rh(eye, vec3(0.0, 0.0, 0.0), -up);
-                let projection =
+                view = Mat4::look_at_rh(eye, vec3(0.0, 0.0, 0.0), -up);
+                projection =
                     Mat4::perspective_infinite_rh(f32::to_radians(90.0), aspect_ratio, 0.01);
                 // let mut correction_mat = Mat4::IDENTITY;
                 // correction_mat.y_axis = glam::vec4(0.0, -1.0, 0.0, 0.0);
