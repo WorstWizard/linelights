@@ -1,7 +1,7 @@
 use std::ops::Sub;
 
 use ash::vk;
-use glam::{vec3, Mat4, Vec4Swizzles, vec2, vec4, Vec4};
+use glam::{vec3, Mat4, Vec4Swizzles, vec2, vec4, Vec4, Vec3};
 use vk_engine::engine_core::{write_struct_to_buffer, write_vec_to_buffer};
 use winit::event::{Event, VirtualKeyCode, WindowEvent, ElementState};
 use winit::event_loop::ControlFlow;
@@ -13,7 +13,7 @@ fn main() {
     let debug_shaders = linelight_vk::make_shaders("debugger.vert", "debugger.frag");
     let ubo_bindings = linelight_vk::make_ubo_bindings();
 
-    let (mut app, event_loop, vid, num_indices, (l0, l1)) =
+    let (mut app, event_loop, vid, num_indices, (l0, l1), scene_verts, scene_indices) =
         linelight_vk::make_custom_app(&shaders, &debug_shaders, &ubo_bindings);
 
     let mut current_frame = 0;
@@ -68,18 +68,19 @@ fn main() {
                             let mut point_in_object_space_2 = inverse_mat.mul_vec4(vec4(normalized_window_coord.x, normalized_window_coord.y, 0.5, 1.0));
                             point_in_object_space_2 *= Vec4::splat(1.0/point_in_object_space_2.w);
                             let dir = point_in_object_space_2.sub(point_in_object_space_1).xyz().normalize();
-                            let second_point = point_in_object_space_1.xyz() + dir * 10.0;
 
-                            debug_verts.push(point_in_object_space_1.xyz());
-                            debug_verts.push(second_point);
-
-                            unsafe {
-                                write_vec_to_buffer(
-                                    app.debug_buffer
-                                        .memory_ptr
-                                        .expect("Uniform buffer not mapped!"),
-                                    &debug_verts,
-                                );
+                            let collision = ray_scene_intersect(point_in_object_space_1.xyz(), dir, &scene_verts, &scene_indices);
+                            if let Some(point) = collision {
+                                debug_verts.push(point_in_object_space_1.xyz());
+                                debug_verts.push(point);
+                                unsafe {
+                                    write_vec_to_buffer(
+                                        app.debug_buffer
+                                            .memory_ptr
+                                            .expect("Uniform buffer not mapped!"),
+                                        &debug_verts,
+                                    );
+                                }    
                             }
 
                             // println!("{}", point_in_object_space_1.xyz());
@@ -258,4 +259,40 @@ pub fn drawing_commands(
         app.logical_device
             .cmd_end_render_pass(app.command_buffers[buffer_index]);
     }
+}
+
+fn ray_triangle_intersect(origin: Vec3, direction: Vec3, t_max: f32, v0: Vec3, v1: Vec3, v2: Vec3) -> Option<f32> {
+    const EPS: f32 = 1e-5;
+    let e1 = v1 - v0;
+    let e2 = v2 - v0;
+    let h = direction.cross(e2);
+    let a = e1.dot(h);
+    if a.abs() < EPS { return None }
+
+    let f = 1.0/a;
+    let s = origin - v0;
+    let u = f * s.dot(h);
+    if u < 0.0 || u > 1.0 { return None }
+
+    let q = s.cross(e1);
+    let v = f * direction.dot(q);
+    if v < 0.0 || (u+v) > 1.0 { return None }
+
+    let t = f * e2.dot(q);
+    if t > EPS && t < t_max { return Some(t) }
+    None
+}
+fn ray_scene_intersect(origin: Vec3, direction: Vec3, vertices: &Vec<Vec3>, indices: &Vec<u32>) -> Option<Vec3> {
+    let closest_t = indices.chunks_exact(3).filter_map(|tri| {
+        let v0 = vertices[tri[0] as usize];
+        let v1 = vertices[tri[1] as usize];
+        let v2 = vertices[tri[2] as usize];
+
+        ray_triangle_intersect(origin, direction, f32::MAX, v0, v1, v2)
+    }).reduce(f32::min);
+
+    if let Some(t) = closest_t {
+        return Some( t * direction + origin )
+    }
+    None
 }

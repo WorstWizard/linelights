@@ -140,6 +140,8 @@ pub fn make_custom_app(
     vk_engine::VertexInputDescriptors,
     u32,
     (Vec4, Vec4),
+    Vec<Vec3>,
+    Vec<u32>
 ) {
     println!("Loading model...");
     let (plane, triangle, line) = load_test_scene();
@@ -156,10 +158,10 @@ pub fn make_custom_app(
     .concat();
 
     let verts: Vec<Vertex> = positions
-        .into_iter()
+        .iter()
         .zip(normals)
         .map(|(p, n)| Vertex {
-            position: p,
+            position: *p,
             normal: n,
         })
         .collect();
@@ -215,7 +217,7 @@ pub fn make_custom_app(
 
     app.update_descriptor_sets(num_verts as u64, num_indices as u64);
 
-    (app, event_loop, vid, num_indices, (l0, l1))
+    (app, event_loop, vid, num_indices, (l0, l1), positions, indices)
 }
 
 pub struct LineLightApp {
