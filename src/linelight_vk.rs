@@ -205,8 +205,8 @@ pub fn make_custom_app(
     println!("Initializing application...");
     let app = LineLightApp::new(
         window,
-        &shaders,
-        &debug_shaders,
+        shaders,
+        debug_shaders,
         &vid,
         &did,
         ubo_bindings.clone(),

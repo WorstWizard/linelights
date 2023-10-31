@@ -295,7 +295,7 @@ fn ray_triangle_intersect(origin: Vec3, direction: Vec3, t_max: f32, v0: Vec3, v
     let f = 1.0/a;
     let s = origin - v0;
     let u = f * s.dot(h);
-    if u < 0.0 || u > 1.0 { return None }
+    if !(0.0..=1.0).contains(&u) { return None }
 
     let q = s.cross(e1);
     let v = f * direction.dot(q);
@@ -321,9 +321,7 @@ fn ray_scene_intersect(origin: Vec3, direction: Vec3, vertices: &Vec<Vec3>, indi
 }
 fn sort(a: &mut f32, b: &mut f32) {
     if a > b {
-        let c = *a;
-        *a = *b;
-        *b = c;
+        std::mem::swap(&mut (*a), &mut (*b));
     }
 }
 
@@ -373,7 +371,7 @@ fn compute_intervals_custom(
     let mut t1 = tmp1/tmp2;
 
     sort(&mut t0, &mut t1);
-    return vec2(t0, t1);
+    vec2(t0, t1)
 }
 fn tri_tri_intersect(
     l0: Vec3,
