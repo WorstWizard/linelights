@@ -1,3 +1,5 @@
+use std::ops::Sub;
+
 use ash::vk;
 use glam::{vec3, Mat4, Vec4Swizzles, vec2, vec4, Vec4};
 use vk_engine::engine_core::{write_struct_to_buffer, write_vec_to_buffer};
@@ -22,7 +24,7 @@ fn main() {
     const TWO_PI: f32 = 2.0 * 3.1415926535;
 
     // Stuff for debugging overlay
-    let debug_verts = vec![
+    let mut debug_verts = vec![
         l0.xyz(),
         l1.xyz(),
     ];
@@ -61,8 +63,27 @@ fn main() {
                             let normalized_window_coord = 2.0 * mouse_position * vec2(1.0/app.swapchain_extent.width as f32, 1.0/app.swapchain_extent.height as f32) - vec2(1.0, 1.0);
                             // println!("Window coords: {}", normalized_window_coord);
                             let inverse_mat = (projection.mul_mat4(&view.mul_mat4(&model))).inverse();
-                            let point_in_object_space = inverse_mat.mul_vec4(vec4(normalized_window_coord.x, normalized_window_coord.y, 0.0, 1.0));
-                            println!("{}", point_in_object_space * Vec4::splat(1.0/point_in_object_space.w));
+                            let mut point_in_object_space_1 = inverse_mat.mul_vec4(vec4(normalized_window_coord.x, normalized_window_coord.y, 0.0, 1.0));
+                            point_in_object_space_1 *= Vec4::splat(1.0/point_in_object_space_1.w);
+                            let mut point_in_object_space_2 = inverse_mat.mul_vec4(vec4(normalized_window_coord.x, normalized_window_coord.y, 0.5, 1.0));
+                            point_in_object_space_2 *= Vec4::splat(1.0/point_in_object_space_2.w);
+                            let dir = point_in_object_space_2.sub(point_in_object_space_1).xyz().normalize();
+                            let second_point = point_in_object_space_1.xyz() + dir * 10.0;
+
+                            debug_verts.push(point_in_object_space_1.xyz());
+                            debug_verts.push(second_point);
+
+                            unsafe {
+                                write_vec_to_buffer(
+                                    app.debug_buffer
+                                        .memory_ptr
+                                        .expect("Uniform buffer not mapped!"),
+                                    &debug_verts,
+                                );
+                            }
+
+                            // println!("{}", point_in_object_space_1.xyz());
+                            // println!("{}", second_point);
                         }
                         mouse_clicked_this_frame = false;
                     }
