@@ -2,35 +2,41 @@ use std::ops::Sub;
 
 use ash::vk;
 use glam::{vec3, Mat4, Vec4Swizzles, vec2, vec4, Vec4, Vec3, Vec2};
-use vk_engine::engine_core::{write_struct_to_buffer, write_vec_to_buffer};
+use vk_engine::engine_core::write_struct_to_buffer;
 use winit::event::{Event, VirtualKeyCode, WindowEvent, ElementState};
 use winit::event_loop::ControlFlow;
 
 mod linelight_vk;
+mod datatypes;
+mod input_handling;
+
+use datatypes::*;
+use input_handling::*;
 
 fn main() {
     let shaders = linelight_vk::make_shaders("simple_shader.vert", "analytic.frag");
     let debug_shaders = linelight_vk::make_shaders("debugger.vert", "debugger.frag");
     let ubo_bindings = linelight_vk::make_ubo_bindings();
 
-    let (mut app, event_loop, vid, num_indices, (l0, l1), scene_verts, scene_indices) =
+    let (mut app, event_loop, vid, scene) =
         linelight_vk::make_custom_app(&shaders, &debug_shaders, &ubo_bindings);
 
     let mut current_frame = 0;
     let mut timer = std::time::Instant::now();
     let mut theta = 0.0;
 
-    const ROT_P_SEC: f32 = -0.01;
-    const TWO_PI: f32 = 2.0 * 3.1415926535;
+    // const ROT_P_SEC: f32 = -0.00;
+    // const TWO_PI: f32 = 2.0 * 3.1415926535;
+    const SPEED: f32 = 100.0;
+    const ENABLE_DEBUG: bool = true;
 
     // Stuff for debugging overlay
-    let light_line = LineSegment(l0.xyz(), l1.xyz());
     let mut debug_overlay = DebugOverlay {
-        light: light_line,
-        tri_e0: light_line,
-        tri_e1: light_line,
-        isect0: light_line,
-        isect1: light_line
+        light: scene.light,
+        tri_e0: scene.light,
+        tri_e1: scene.light,
+        isect0: scene.light,
+        isect1: scene.light
     };
     unsafe {
         write_struct_to_buffer(
@@ -40,73 +46,31 @@ fn main() {
             &debug_overlay as *const DebugOverlay,
         );
     }
-    let mut mouse_clicked_this_frame = true;
-    let mut mouse_position = vec2(0.0, 0.0);
 
-    let mut model = Mat4::IDENTITY;
-    let mut view = Mat4::IDENTITY;
-    let mut projection = Mat4::IDENTITY;
 
+    let mut inputs = Inputs::default();
+    // Facing wrong way? Everything regarding view/projection is scuffed, gotta fix it at some point
+    let mut camera = Camera::new();
+    camera.eye = vec3(0.0, -4.0, 5.0);
+
+    let model_pos = vec3(0.0, 0.0, 0.0);
+    let model_scale = 0.5;
+    let mut mvp = vk_engine::MVP {
+        model: Mat4::from_scale_rotation_translation(
+            vec3(model_scale, -model_scale, model_scale),
+            glam::Quat::IDENTITY,
+            model_pos),
+        view: Mat4::IDENTITY,
+        projection: Mat4::IDENTITY,
+    };
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
         match event {
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                //WindowEvent::Resized(new_size) => app.recreate_swapchain(&shaders, &vid, Some(ubo_bindings.clone())),
-                WindowEvent::KeyboardInput { input, .. } => match input.virtual_keycode {
-                    Some(VirtualKeyCode::Escape) => *control_flow = ControlFlow::Exit,
-                    _ => (),
+                WindowEvent::KeyboardInput{..} | WindowEvent::CursorMoved{..} | WindowEvent::MouseInput{..} => {
+                    inputs.do_input(event, control_flow)
                 },
-                WindowEvent::CursorMoved { position, .. } => {
-                    mouse_position.x = position.x as f32;
-                    mouse_position.y = position.y as f32;
-                },
-                WindowEvent::MouseInput { state, button: winit::event::MouseButton::Left, .. } => match state {
-                    ElementState::Pressed => {
-
-                        // Place debug visualization onto scene at clicked point
-                        if mouse_clicked_this_frame {
-                            let normalized_window_coord = 2.0 * mouse_position * vec2(1.0/app.swapchain_extent.width as f32, 1.0/app.swapchain_extent.height as f32) - vec2(1.0, 1.0);
-                            let inverse_mat = (projection.mul_mat4(&view.mul_mat4(&model))).inverse();
-                            let mut point_in_object_space_1 = inverse_mat.mul_vec4(vec4(normalized_window_coord.x, normalized_window_coord.y, 0.0, 1.0));
-                            point_in_object_space_1 *= Vec4::splat(1.0/point_in_object_space_1.w);
-                            let mut point_in_object_space_2 = inverse_mat.mul_vec4(vec4(normalized_window_coord.x, normalized_window_coord.y, 0.5, 1.0));
-                            point_in_object_space_2 *= Vec4::splat(1.0/point_in_object_space_2.w);
-                            let dir = point_in_object_space_2.sub(point_in_object_space_1).xyz().normalize();
-
-                            let collision = ray_scene_intersect(point_in_object_space_1.xyz(), dir, &scene_verts, &scene_indices);
-                            if let Some(point) = collision {
-                                debug_overlay.tri_e0 = LineSegment(point, l0.xyz());
-                                debug_overlay.tri_e1 = LineSegment(point, l1.xyz());
-
-                                let intersection = tri_tri_intersect(l0.xyz(), l1.xyz(), point, scene_verts[4], scene_verts[5], scene_verts[6]);
-                                if let Some((interval, isect0, isect1)) = intersection {
-                                    debug_overlay.isect0 = LineSegment(point, isect0);
-                                    debug_overlay.isect1 = LineSegment(point, isect1);
-                                } else {
-                                    debug_overlay.isect0 = LineSegment(l0.xyz(), l1.xyz());
-                                    debug_overlay.isect1 = LineSegment(l0.xyz(), l1.xyz());
-                                }
-
-                                unsafe {
-                                    write_struct_to_buffer(
-                                        app.debug_buffer
-                                            .memory_ptr
-                                            .expect("Uniform buffer not mapped!"),
-                                        &debug_overlay as *const DebugOverlay,
-                                    );
-                                }   
-                            }
-
-                            // println!("{}", point_in_object_space_1.xyz());
-                            // println!("{}", second_point);
-                        }
-                        mouse_clicked_this_frame = false;
-                    }
-                    ElementState::Released => {
-                        mouse_clicked_this_frame = true;
-                    }
-                }
                 _ => (),
             },
             Event::MainEventsCleared => {
@@ -123,33 +87,37 @@ fn main() {
 
                 app.reset_in_flight_fence(current_frame);
 
-                let eye = vec3(0.0, -4.0, 5.0);
-                let model_pos = vec3(0.0, 0.0, 0.0);
-                let up = vec3(0.0, -1.0, 0.0);
+
+                // Do debug overlay
+                if ENABLE_DEBUG && inputs.left_click {
+                    let cursor_pos = inputs.cursor_pos;
+                    let window_size = vec2(app.swapchain_extent.width as f32, app.swapchain_extent.height as f32);
+                    update_debug_overlay(cursor_pos, &mut app, &mvp, window_size, &scene, &mut debug_overlay)
+                }
+
+                
+                // Do camera movement
+                let delta_time = timer.elapsed().as_secs_f32();
+                if inputs.move_forward { camera.eye += camera.direction() * delta_time * SPEED * delta_time }
+                if inputs.move_backward { camera.eye -= camera.direction() * delta_time * SPEED * delta_time }
+                if inputs.move_right { camera.eye += camera.direction().cross(camera.up()) * delta_time * SPEED * delta_time }
+                if inputs.move_left { camera.eye -= camera.direction().cross(camera.up()) * delta_time * SPEED * delta_time }
+                if inputs.move_up { camera.eye -= camera.up() * delta_time * SPEED * delta_time }
+                if inputs.move_down { camera.eye += camera.up() * delta_time * SPEED * delta_time }
+                
+                let cursor_delta = inputs.cursor_delta();
+                if inputs.right_click {
+                    camera.rotate(-cursor_delta.x*0.01, cursor_delta.y*0.01);
+                }
+            
+                mvp.view = Mat4::look_to_rh(camera.eye, camera.direction(), camera.up());
+
+
                 let aspect_ratio =
                     app.swapchain_extent.width as f32 / app.swapchain_extent.height as f32;
-                let model_scale = 0.5;
-
-                theta = (theta + (ROT_P_SEC * TWO_PI) * timer.elapsed().as_secs_f32()) % TWO_PI;
-
-                model = Mat4::from_scale_rotation_translation(
-                    vec3(model_scale, -model_scale, model_scale),
-                    glam::Quat::from_rotation_y(theta),
-                    model_pos,
-                );
-                view = Mat4::look_at_rh(eye, vec3(0.0, 0.0, 0.0), -up);
-                projection =
+                mvp.projection =
                     Mat4::perspective_infinite_rh(f32::to_radians(90.0), aspect_ratio, 0.01);
-                // let mut correction_mat = Mat4::IDENTITY;
-                // correction_mat.y_axis = glam::vec4(0.0, -1.0, 0.0, 0.0);
-
-                let mvp = vk_engine::MVP {
-                    model,
-                    view,
-                    projection,
-                };
-
-                let ubo = linelight_vk::LineLightUniform { l0, l1, mvp };
+                let ubo = linelight_vk::LineLightUniform { l0: Vec4::from((scene.light.0,1.0)), l1: Vec4::from((scene.light.1,1.0)), mvp: mvp.clone() };
 
                 unsafe {
                     write_struct_to_buffer(
@@ -159,10 +127,15 @@ fn main() {
                         &ubo as *const linelight_vk::LineLightUniform,
                     );
 
-
-                    app.record_command_buffer(current_frame, |app| {
-                        drawing_commands(app, current_frame, img_index, num_indices, DebugOverlay::num_verts());
-                    })
+                    if ENABLE_DEBUG {
+                        app.record_command_buffer(current_frame, |app| {
+                            drawing_commands(app, current_frame, img_index, scene.indices.len() as u32, DebugOverlay::num_verts());
+                        })
+                    } else {
+                        app.record_command_buffer(current_frame, |app| {
+                            drawing_commands(app, current_frame, img_index, scene.indices.len() as u32, 0);
+                        })
+                    }
                 }
 
                 app.submit_drawing_command_buffer(current_frame);
@@ -183,7 +156,43 @@ fn main() {
     });
 }
 
-pub fn drawing_commands(
+fn update_debug_overlay(clicked_pos: Vec2, app: &mut linelight_vk::LineLightApp, mvp: &vk_engine::MVP, window_size: Vec2, scene: &Scene, debug_overlay: &mut DebugOverlay) {
+    let normalized_window_coord = 2.0 * clicked_pos * vec2(1.0/window_size.x, 1.0/window_size.y) - vec2(1.0, 1.0);
+    let inverse_mat = (mvp.projection.mul_mat4(&mvp.view.mul_mat4(&mvp.model))).inverse();
+    let mut point_in_scene_space_0 = inverse_mat.mul_vec4(vec4(normalized_window_coord.x, normalized_window_coord.y, 0.0, 1.0));
+    point_in_scene_space_0 *= Vec4::splat(1.0/point_in_scene_space_0.w);
+    let mut point_in_scene_space_1 = inverse_mat.mul_vec4(vec4(normalized_window_coord.x, normalized_window_coord.y, 0.5, 1.0));
+    point_in_scene_space_1 *= Vec4::splat(1.0/point_in_scene_space_1.w);
+    let dir = point_in_scene_space_1.sub(point_in_scene_space_0).xyz().normalize();
+
+    let collision = ray_scene_intersect(point_in_scene_space_0.xyz(), dir, &scene.vertices, &scene.indices);
+    if let Some(point) = collision {
+        let l0 = scene.light.0;
+        let l1 = scene.light.1;
+        debug_overlay.tri_e0 = LineSegment(point, l0);
+        debug_overlay.tri_e1 = LineSegment(point, l1);
+
+        let intersection = tri_tri_intersect(l0, l1, point, scene.vertices[4], scene.vertices[5], scene.vertices[6]);
+        if let Some((interval, isect0, isect1)) = intersection {
+            debug_overlay.isect0 = LineSegment(point, isect0);
+            debug_overlay.isect1 = LineSegment(point, isect1);
+        } else {
+            debug_overlay.isect0 = LineSegment(l0, l1);
+            debug_overlay.isect1 = LineSegment(l0, l1);
+        }
+
+        unsafe {
+            write_struct_to_buffer(
+                app.debug_buffer
+                    .memory_ptr
+                    .expect("Uniform buffer not mapped!"),
+                debug_overlay as *const DebugOverlay,
+            );
+        }   
+    }
+}
+
+fn drawing_commands(
     app: &mut linelight_vk::LineLightApp,
     buffer_index: usize,
     swapchain_image_index: u32,
@@ -275,23 +284,6 @@ pub fn drawing_commands(
             .cmd_end_render_pass(app.command_buffers[buffer_index]);
     }
 }
-
-#[repr(C)]
-struct DebugOverlay {
-    pub light: LineSegment,
-    pub tri_e0: LineSegment,
-    pub tri_e1: LineSegment,
-    pub isect0: LineSegment,
-    pub isect1: LineSegment,
-}
-impl DebugOverlay {
-    fn num_verts() -> u32 {
-        (std::mem::size_of::<DebugOverlay>() / std::mem::size_of::<Vec3>()) as u32
-    }
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct LineSegment(Vec3, Vec3);
 
 fn ray_triangle_intersect(origin: Vec3, direction: Vec3, t_max: f32, v0: Vec3, v1: Vec3, v2: Vec3) -> Option<f32> {
     const EPS: f32 = 1e-5;
@@ -427,8 +419,8 @@ fn tri_tri_intersect(
         return None
     }
 
-    let out0 = L * f32::max(interval.x, 0.0) + l0;
-    let out1 = L * f32::min(interval.y, 1.0) + l0;
+    let out0 = L * interval.x + l0;
+    let out1 = L * interval.y + l0;
 
     Some((interval, out0, out1))
 }

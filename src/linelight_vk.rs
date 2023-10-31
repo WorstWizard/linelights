@@ -2,7 +2,7 @@ use ash::extensions::ext::DebugUtils;
 use ash::extensions::khr::{Surface, Swapchain};
 use ash::vk;
 use cstr::cstr;
-use glam::{vec3, Vec3, Vec4};
+use glam::{vec3, Vec3, Vec4Swizzles};
 use std::ffi::{c_char, CStr};
 use std::mem::ManuallyDrop;
 use std::rc::Rc;
@@ -10,6 +10,8 @@ use std::{ffi::CString, mem::MaybeUninit};
 use tobj::{self, Model};
 use vk_engine::{engine_core, shaders};
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
+
+use crate::datatypes::{Scene, LineSegment};
 
 static APP_NAME: &str = "Linelight Experiments";
 
@@ -138,10 +140,7 @@ pub fn make_custom_app(
     LineLightApp,
     winit::event_loop::EventLoop<()>,
     vk_engine::VertexInputDescriptors,
-    u32,
-    (Vec4, Vec4),
-    Vec<Vec3>,
-    Vec<u32>
+    Scene
 ) {
     println!("Loading model...");
     let (plane, triangle, line) = load_test_scene();
@@ -217,7 +216,13 @@ pub fn make_custom_app(
 
     app.update_descriptor_sets(num_verts as u64, num_indices as u64);
 
-    (app, event_loop, vid, num_indices, (l0, l1), positions, indices)
+    let scene = Scene {
+        vertices: positions,
+        indices,
+        light: LineSegment(l0.xyz(), l1.xyz())
+    };
+
+    (app, event_loop, vid, scene)
 }
 
 pub struct LineLightApp {
