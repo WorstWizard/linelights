@@ -23,7 +23,6 @@ fn main() {
 
     let mut current_frame = 0;
     let mut timer = std::time::Instant::now();
-    let mut theta = 0.0;
 
     // const ROT_P_SEC: f32 = -0.00;
     // const TWO_PI: f32 = 2.0 * 3.1415926535;
