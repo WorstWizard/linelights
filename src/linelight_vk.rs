@@ -365,11 +365,11 @@ impl LineLightApp {
         );
 
         //// Push constants
-        let push_constants = [1.0];
+        let _push_constants = [1.0];
 
         //// Graphics pipeline
         let render_pass = render_pass(&logical_device, image_format);
-        let (graphics_pipeline, graphics_pipeline_layout, descriptor_set_layout) =
+        let (graphics_pipeline, graphics_pipeline_layout, _descriptor_set_layout) =
             main_pipeline(
                 &logical_device,
                 render_pass,
@@ -776,7 +776,7 @@ impl LineLightApp {
             image_format,
         );
         let render_pass = render_pass(&self.logical_device, image_format);
-        let (graphics_pipeline, graphics_pipeline_layout, descriptor_set_layout) =
+        let (graphics_pipeline, graphics_pipeline_layout, _descriptor_set_layout) =
             main_pipeline(
                 &self.logical_device,
                 render_pass,

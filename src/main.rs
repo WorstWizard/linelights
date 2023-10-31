@@ -3,7 +3,7 @@ use std::ops::Sub;
 use ash::vk;
 use glam::{vec3, Mat4, Vec4Swizzles, vec2, vec4, Vec4, Vec3, Vec2};
 use vk_engine::engine_core::write_struct_to_buffer;
-use winit::event::{Event, VirtualKeyCode, WindowEvent, ElementState};
+use winit::event::{Event, WindowEvent};
 use winit::event_loop::ControlFlow;
 
 mod linelight_vk;
@@ -172,7 +172,7 @@ fn update_debug_overlay(clicked_pos: Vec2, app: &mut linelight_vk::LineLightApp,
         debug_overlay.tri_e1 = LineSegment(point, l1);
 
         let intersection = tri_tri_intersect(l0, l1, point, scene.vertices[4], scene.vertices[5], scene.vertices[6]);
-        if let Some((interval, isect0, isect1)) = intersection {
+        if let Some((_interval, isect0, isect1)) = intersection {
             debug_overlay.isect0 = LineSegment(point, isect0);
             debug_overlay.isect1 = LineSegment(point, isect1);
         } else {
@@ -358,18 +358,18 @@ fn compute_intervals_custom(
     }
 
     // // Project intersections onto line t*(l1-l0) + l0 by computation of t-values
-    let L = l1 - l0;
-    let P = pos - l0;
+    let l = l1 - l0;
+    let p = pos - l0;
 
     let i = 0;
     let j = 1;
 
-    let mut tmp1 = isect0[i]*P[j] - isect0[j]*P[i] + pos[i]*l0[j] - pos[j]*l0[i];
-    let mut tmp2 = isect0[i]*L[j] - isect0[j]*L[i] + pos[j]*L[i]  - pos[i]*L[j];
+    let mut tmp1 = isect0[i]*p[j] - isect0[j]*p[i] + pos[i]*l0[j] - pos[j]*l0[i];
+    let mut tmp2 = isect0[i]*l[j] - isect0[j]*l[i] + pos[j]*l[i]  - pos[i]*l[j];
     let mut t0 = tmp1/tmp2;
 
-    tmp1 = isect1[i]*P[j] - isect1[j]*P[i] + pos[i]*l0[j] - pos[j]*l0[i];
-    tmp2 = isect1[i]*L[j] - isect1[j]*L[i] + pos[j]*L[i]  - pos[i]*L[j];
+    tmp1 = isect1[i]*p[j] - isect1[j]*p[i] + pos[i]*l0[j] - pos[j]*l0[i];
+    tmp2 = isect1[i]*l[j] - isect1[j]*l[i] + pos[j]*l[i]  - pos[i]*l[j];
     let mut t1 = tmp1/tmp2;
 
     sort(&mut t0, &mut t1);
@@ -398,9 +398,9 @@ fn tri_tri_intersect(
     if d_l0*d_l1 > 0.0 && d_l0*d_pos > 0.0 { return None }
 
     // Plane equation for light triangle: dot(n, x) + d = 0
-    let L = l1 - l0;
+    let l = l1 - l0;
     e1 = pos - l0;
-    n = L.cross(e1);
+    n = l.cross(e1);
     d = -n.dot(l0);
 
     // Put triangle 1 into plane equation 2
@@ -418,8 +418,8 @@ fn tri_tri_intersect(
         return None
     }
 
-    let out0 = L * interval.x + l0;
-    let out1 = L * interval.y + l0;
+    let out0 = l * interval.x + l0;
+    let out1 = l * interval.y + l0;
 
     Some((interval, out0, out1))
 }
