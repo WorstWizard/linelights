@@ -27,7 +27,7 @@ fn main() {
     // const ROT_P_SEC: f32 = -0.00;
     // const TWO_PI: f32 = 2.0 * 3.1415926535;
     const SPEED: f32 = 100.0;
-    const ENABLE_DEBUG: bool = true;
+    const ENABLE_DEBUG: bool = false;
 
     // Stuff for debugging overlay
     let mut debug_overlay = DebugOverlay {
@@ -321,10 +321,16 @@ fn ray_scene_intersect(origin: Vec3, direction: Vec3, vertices: &Vec<Vec3>, indi
 }
 fn sort(a: &mut f32, b: &mut f32) {
     if a > b {
+        // println!("swapped {}", a);
         std::mem::swap(&mut (*a), &mut (*b));
     }
 }
 
+fn sqr_dist_to_line(l: Vec3, p0: Vec3, p: Vec3) -> f32 {
+    let k = p-p0;
+    let d = k.cross(l);
+    d.dot(d)
+}
 fn line_plane_intersect(n: Vec3, p0: Vec3, l: Vec3, l0: Vec3) -> Vec3 {
     let d = (p0 - l0).dot(n) / l.dot(n);
     l0 + d*l
@@ -354,21 +360,52 @@ fn compute_intervals_custom(
         isect0 = line_plane_intersect(n, pos, v2 - v0, v0);
         isect1 = line_plane_intersect(n, pos, v2 - v1, v1);
     }
-
-    // // Project intersections onto line t*(l1-l0) + l0 by computation of t-values
+    
+    // // If distance from light to point is between distances from light to intersections, bad zone.
+    // let bad_zone = {
+    //     fn dist(n: Vec3, a: Vec3, p: Vec3) -> f32 {
+        //         let k = p-a;
+        //         let d = k.cross(n);
+        //         d.dot(d)
+    //     }
+    
+    //     let mut d0 = dist(l, l0, isect0);
+    //     let mut d1 = dist(l, l0, isect1);
+    //     let dp = dist(l, l0, pos);
+    //     sort(&mut d0, &mut d1);
+    //     if d0 < dp && dp < d1 {
+        //         true
+    //     } else {
+    //         false
+    //     }
+    // };
+    
+    // Project intersections onto line t*(l1-l0) + l0 by computation of t-values
     let l = l1 - l0;
     let p = pos - l0;
-
+    
     let i = 0;
-    let j = 1;
+    let j = 2;
 
     let mut tmp1 = isect0[i]*p[j] - isect0[j]*p[i] + pos[i]*l0[j] - pos[j]*l0[i];
     let mut tmp2 = isect0[i]*l[j] - isect0[j]*l[i] + pos[j]*l[i]  - pos[i]*l[j];
     let mut t0 = tmp1/tmp2;
 
+    // println!("tmp1 {}, tmp2 {}, t0 {}", tmp1, tmp2, t0);
+
     tmp1 = isect1[i]*p[j] - isect1[j]*p[i] + pos[i]*l0[j] - pos[j]*l0[i];
     tmp2 = isect1[i]*l[j] - isect1[j]*l[i] + pos[j]*l[i]  - pos[i]*l[j];
     let mut t1 = tmp1/tmp2;
+
+
+
+    let dp = sqr_dist_to_line(l, l0, pos);
+    let di0 = sqr_dist_to_line(l, l0, isect0);
+    let di1 = sqr_dist_to_line(l, l0, isect1);
+
+    const INF: f32 = 1e10;
+    if di0 > dp {t0 = -t0.signum() * INF};
+    if di1 > dp {t1 = -t1.signum() * INF};
 
     sort(&mut t0, &mut t1);
     vec2(t0, t1)

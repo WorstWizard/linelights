@@ -65,6 +65,11 @@ void sort(inout float a, inout float b) {
         b = c;
     }
 }
+float sqr_dist_to_line(vec3 l, vec3 p0, vec3 p) {
+    vec3 k = p - p0;
+    vec3 d = cross(k, l);
+    return dot(d,d);
+}
 
 // Plane given by normal n and point p0, line by direction l and point l0
 void line_plane_intersect(vec3 n, vec3 p0, vec3 l, vec3 l0, out vec3 isect) {
@@ -97,7 +102,7 @@ vec2 compute_intervals_custom(
         line_plane_intersect(n, pos, v2 - v1, v1, isect1);
     }
 
-    // // Project intersections onto line t*(l1-l0) + l0 by computation of t-values
+    // Project intersections onto line t*(l1-l0) + l0 by computation of t-values
     float t0, t1, tmp1, tmp2;
     vec3 L = l1 - l0;
     vec3 P = pos - l0;
@@ -112,6 +117,16 @@ vec2 compute_intervals_custom(
     tmp1 = isect1[i]*P[j] - isect1[j]*P[i] + pos[i]*l0[j] - pos[j]*l0[i];
     tmp2 = isect1[i]*L[j] - isect1[j]*L[i] + pos[j]*L[i]  - pos[i]*L[j];
     t1 = tmp1/tmp2;
+
+    // If an intersection is further away from the line than the sampled point, the t-value will cross infinity
+    // If both are further away, we will already have ruled out an intersection before calling this function, so this is not a concern
+    float dp = sqr_dist_to_line(L, l0, pos);
+    float di0 = sqr_dist_to_line(L, l0, isect0);
+    float di1 = sqr_dist_to_line(L, l0, isect1);
+    
+    const float INF = 1e10;
+    if (di0 > dp) t0 = -sign(t0) * INF;
+    if (di1 > dp) t1 = -sign(t1) * INF;
 
     sort(t0, t1);
     return vec2(t0, t1);
@@ -187,7 +202,7 @@ void main() {
     float irr;
     vec2 interval;
     vec3 is0, is1;
-    if (tri_tri_intersect_custom(l0, l1, pos, v0, v1, v2, interval, is0, is1)) {
+    if (tri_tri_intersect_custom(l0, l1, pos + 0.001*n, v0, v1, v2, interval, is0, is1)) {
         if (interval.x < 0.0) { // Lower edge occluded
             I *= distance(is1,l1)/distance(l0,l1);
             irr = sample_line_light_analytic(pos, n, is1, l1, I);
