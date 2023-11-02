@@ -2,12 +2,14 @@ use std::ops::Sub;
 
 use ash::vk;
 use glam::{vec3, Mat4, Vec4Swizzles, vec2, vec4, Vec4, Vec3, Vec2};
+use scene_loading::Scene;
 use vk_engine::engine_core::write_struct_to_buffer;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::ControlFlow;
 
-mod linelight_vk;
 mod datatypes;
+mod scene_loading;
+mod linelight_vk;
 mod input_handling;
 
 use datatypes::*;
@@ -27,7 +29,7 @@ fn main() {
     // const ROT_P_SEC: f32 = -0.00;
     // const TWO_PI: f32 = 2.0 * 3.1415926535;
     const SPEED: f32 = 100.0;
-    const ENABLE_DEBUG: bool = false;
+    const ENABLE_DEBUG: bool = true;
 
     // Stuff for debugging overlay
     let mut debug_overlay = DebugOverlay {
@@ -116,14 +118,14 @@ fn main() {
                     app.swapchain_extent.width as f32 / app.swapchain_extent.height as f32;
                 mvp.projection =
                     Mat4::perspective_infinite_rh(f32::to_radians(90.0), aspect_ratio, 0.01);
-                let ubo = linelight_vk::LineLightUniform { l0: Vec4::from((scene.light.0,1.0)), l1: Vec4::from((scene.light.1,1.0)), mvp: mvp.clone() };
+                let ubo = LineLightUniform { l0: Vec4::from((scene.light.0,1.0)), l1: Vec4::from((scene.light.1,1.0)), mvp: mvp.clone() };
 
                 unsafe {
                     write_struct_to_buffer(
                         app.uniform_buffers[current_frame]
                             .memory_ptr
                             .expect("Uniform buffer not mapped!"),
-                        &ubo as *const linelight_vk::LineLightUniform,
+                        &ubo as *const LineLightUniform,
                     );
 
                     if ENABLE_DEBUG {
@@ -164,14 +166,16 @@ fn update_debug_overlay(clicked_pos: Vec2, app: &mut linelight_vk::LineLightApp,
     point_in_scene_space_1 *= Vec4::splat(1.0/point_in_scene_space_1.w);
     let dir = point_in_scene_space_1.sub(point_in_scene_space_0).xyz().normalize();
 
-    let collision = ray_scene_intersect(point_in_scene_space_0.xyz(), dir, &scene.vertices, &scene.indices);
+
+
+    let collision = ray_scene_intersect(point_in_scene_space_0.xyz(), dir, scene);
     if let Some(point) = collision {
         let l0 = scene.light.0;
         let l1 = scene.light.1;
         debug_overlay.tri_e0 = LineSegment(point, l0);
         debug_overlay.tri_e1 = LineSegment(point, l1);
 
-        let intersection = tri_tri_intersect(l0, l1, point, scene.vertices[4], scene.vertices[5], scene.vertices[6]);
+        let intersection = tri_tri_intersect(l0, l1, point, scene.vertices[4].position, scene.vertices[5].position, scene.vertices[6].position);
         if let Some((_interval, isect0, isect1)) = intersection {
             debug_overlay.isect0 = LineSegment(point, isect0);
             debug_overlay.isect1 = LineSegment(point, isect1);
@@ -305,11 +309,11 @@ fn ray_triangle_intersect(origin: Vec3, direction: Vec3, t_max: f32, v0: Vec3, v
     if t > EPS && t < t_max { return Some(t) }
     None
 }
-fn ray_scene_intersect(origin: Vec3, direction: Vec3, vertices: &Vec<Vec3>, indices: &Vec<u32>) -> Option<Vec3> {
-    let closest_t = indices.chunks_exact(3).filter_map(|tri| {
-        let v0 = vertices[tri[0] as usize];
-        let v1 = vertices[tri[1] as usize];
-        let v2 = vertices[tri[2] as usize];
+fn ray_scene_intersect(origin: Vec3, direction: Vec3, scene: &Scene) -> Option<Vec3> {
+    let closest_t = scene.indices.chunks_exact(3).filter_map(|tri| {
+        let v0 = scene.vertices[tri[0] as usize].position;
+        let v1 = scene.vertices[tri[1] as usize].position;
+        let v2 = scene.vertices[tri[2] as usize].position;
 
         ray_triangle_intersect(origin, direction, f32::MAX, v0, v1, v2)
     }).reduce(f32::min);

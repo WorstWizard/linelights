@@ -2,11 +2,20 @@ use std::f32::consts::PI;
 
 use glam::{Vec3, Quat};
 
-pub struct Scene {
-    pub vertices: Vec<Vec3>,
-    pub indices: Vec<u32>,
-    pub light: LineSegment,
+#[repr(C)]
+pub struct LineLightUniform {
+    pub mvp: vk_engine::MVP,
+    pub l0: glam::Vec4,
+    pub l1: glam::Vec4,
 }
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Vertex {
+    pub position: Vec3,
+    pub normal: Vec3,
+}
+
 pub struct Camera {
     pub eye: Vec3,
     direction: Vec3,
