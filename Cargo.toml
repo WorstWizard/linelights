@@ -14,3 +14,4 @@ tobj = "4.0.0"
 vk_engine = {git = "https://github.com/WorstWizard/vk_engine.git", branch = "linelights", features = ["shader_compilation"]}
 winit = "0.28.6"
 cstr = "0.2"
+gltf = "1.3.0"

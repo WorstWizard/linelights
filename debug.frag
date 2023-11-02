@@ -199,9 +199,9 @@ bool tri_tri_intersect(
 
 
 void main() {
-    vec3 pos = to_world(inPos);
-    vec3 l0 = to_world(l0);
-    vec3 l1 = to_world(l1);
+    // vec3 pos = to_world(inPos);
+    // vec3 l0 = to_world(l0);
+    // vec3 l1 = to_world(l1);
 
     // float d0 = distance(pos, l0_pos);
     // float d1 = distance(pos, l1_pos);
@@ -212,18 +212,18 @@ void main() {
     // Ray ray0; ray0.origin = pos; ray0.direction = normalize(l0_pos - pos); ray0.t_max = d0;
     // Ray ray1; ray1.origin = pos; ray1.direction = normalize(l1_pos - pos); ray1.t_max = d1;
 
-    float irr = 1.0;
+    // float irr = 1.0;
 
-    for (int i = 0; i < indices.length(); i += 3) {
-        vec3 v0 = to_world(verts[indices[i]]);
-        vec3 v1 = to_world(verts[indices[i+1]]);
-        vec3 v2 = to_world(verts[indices[i+2]]);
+    // for (int i = 0; i < indices.length(); i += 3) {
+    //     vec3 v0 = to_world(verts[indices[i]]);
+    //     vec3 v1 = to_world(verts[indices[i+1]]);
+    //     vec3 v2 = to_world(verts[indices[i+2]]);
 
-        // if ( ray_triangle_intersect(ray0, v0, v1, v2) ) irr_0 = 0.0;
-        // if ( ray_triangle_intersect(ray1, v0, v1, v2) ) irr_1 = 0.0;
-        // Light triangle: pos_l0_l1 
-        if (tri_tri_intersect(pos + vec3(-0.01, -0.01, 0.0), l0, l1, v0, v1, v2)) irr = 0.2;
-    }
+    //     // if ( ray_triangle_intersect(ray0, v0, v1, v2) ) irr_0 = 0.0;
+    //     // if ( ray_triangle_intersect(ray1, v0, v1, v2) ) irr_1 = 0.0;
+    //     // Light triangle: pos_l0_l1 
+    //     if (tri_tri_intersect(pos + vec3(-0.01, -0.01, 0.0), l0, l1, v0, v1, v2)) irr = 0.2;
+    // }
     // float irr = irr_0 + irr_1;
 
     // Upright triangle
@@ -232,7 +232,7 @@ void main() {
     // vec3 v2 = to_world(verts[6]);
 
     // vec3 color = tri_tri_intersect(pos + vec3(-0.01, -0.01, 0.0), l0, l1, v0, v1, v2)/2.0 + vec3(0.5);
-    vec3 color = vec3(1.0,0.0,0.0) * irr + vec3(0.0);
+    vec3 color = vec3(1.0,0.0,0.0);
 
     outColor = vec4(color,1.0);
 }

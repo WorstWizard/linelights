@@ -114,7 +114,7 @@ float sample_line_light_stochastic(vec3 pos, vec3 n, vec3 l0, vec3 l1, float I) 
 
         if (intersect_scene(r)) continue;
 
-        float clamped_cos = clamp(dot(n,l/d), 0.0, 1.0);
+        float clamped_cos = clamp(dot(n,r.direction), 0.0, 1.0);
         irr += I * clamped_cos / (d*d) / float(NUM_SAMPLES);
     }
     return irr;
@@ -123,7 +123,7 @@ float sample_line_light_stochastic(vec3 pos, vec3 n, vec3 l0, vec3 l1, float I) 
 void main() {
     rng_state = hash(uvec2(uint(gl_FragCoord.x),uint(gl_FragCoord.y)));
 
-    float I = 5.0;
+    float I = 3.0;
     vec3 ambient = vec3(0.1);
 
     vec3 pos = to_world(inPos);

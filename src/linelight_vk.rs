@@ -65,7 +65,7 @@ pub fn make_ubo_bindings() -> Vec<vk::DescriptorSetLayoutBinding> {
             .binding(3)
             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
             .descriptor_count(1)
-            .stage_flags(vk::ShaderStageFlags::FRAGMENT)
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT),
     ]
 }
 
@@ -80,7 +80,8 @@ pub fn make_custom_app(
     Scene,
 ) {
     println!("Loading model...");
-    let scene = Scene::test_scene_one();
+    // let scene = Scene::test_scene_one();
+    let scene = Scene::test_scene_two();
 
     let vid = Vertex::input_descriptors();
     let did = vk_engine::VertexInputDescriptors {

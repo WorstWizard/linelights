@@ -16,7 +16,7 @@ use datatypes::*;
 use input_handling::*;
 
 fn main() {
-    let shaders = linelight_vk::make_shaders("simple_shader.vert", "analytic.frag");
+    let shaders = linelight_vk::make_shaders("simple_shader.vert", "stochastic.frag");
     let debug_shaders = linelight_vk::make_shaders("debugger.vert", "debugger.frag");
     let ubo_bindings = linelight_vk::make_ubo_bindings();
 
@@ -79,12 +79,7 @@ fn main() {
 
                 let img_index = match app.acquire_next_image(current_frame) {
                     Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
-                        app.recreate_swapchain(
-                            &shaders,
-                            &debug_shaders,
-                            &vid,
-                            &ubo_bindings,
-                        );
+                        app.recreate_swapchain(&shaders, &debug_shaders, &vid, &ubo_bindings);
                         return;
                     }
                     Ok((i, _)) => i, // Swapchain may be suboptimal, but it's easier to just proceed
