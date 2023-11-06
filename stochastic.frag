@@ -78,16 +78,14 @@ bool intersect_scene(Ray r) {
 }
 
 // 2D hash with good performance, as per https://www.shadertoy.com/view/4tXyWN, recommended/tested in [Jarzynski 2020]
-uint hash(uvec2 x)
-{
+uint hash(uvec2 x) {
     uvec2 q = 1103515245U * ( (x>>1U) ^ (x.yx   ) );
     uint  n = 1103515245U * ( (q.x  ) ^ (q.y>>3U) );
     return n;
 }
 // PCG PRNG as per https://www.reedbeta.com/blog/hash-functions-for-gpu-rendering/
 uint rng_state;
-float rand_pcg()
-{
+float rand_pcg() {
     uint state = rng_state;
     rng_state = rng_state * 747796405u + 2891336453u;
     uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;

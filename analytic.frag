@@ -227,6 +227,14 @@ void occlude_intervals(inout IntervalArray int_arr, vec2 occ_int) {
     }
 }
 
+// 2D hash with good performance, as per https://www.shadertoy.com/view/4tXyWN, recommended/tested in [Jarzynski 2020]
+float noise() {
+    uvec2 x = uvec2(uint(gl_FragCoord.x),uint(gl_FragCoord.y));
+    uvec2 q = 1103515245U * ( (x>>1U) ^ (x.yx   ) );
+    uint  n = 1103515245U * ( (q.x  ) ^ (q.y>>3U) );
+    return float(n) * (1.0/float(0xffffffffU));
+}
+
 // Simple heatmap from -1.0 to +1.0
 vec3 heatmap(float t) {
     vec3 blue = vec3(0.0,0.0,1.0);
@@ -282,9 +290,11 @@ void main() {
         float fraction_of_light = I * (interval.y - interval.x);
         irr += sample_line_light_analytic(pos, n, p0, p1, fraction_of_light);
     }
-
     // vec3 color = heatmap(int_arr.size / 4.0 - 1.0);
     vec3 color = irr * vec3(1.0) + ambient;
 
+
+    // Fix color banding by adding noise: https://pixelmager.github.io/linelight/banding.html
+    color += noise() / 255.0;
     outColor = vec4(color,1.0);
 }
