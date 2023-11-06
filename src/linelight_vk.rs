@@ -73,16 +73,12 @@ pub fn make_custom_app(
     shaders: &[vk_engine::shaders::Shader],
     debug_shaders: &[vk_engine::shaders::Shader],
     ubo_bindings: &[vk::DescriptorSetLayoutBinding],
+    scene: &Scene
 ) -> (
     LineLightApp,
     winit::event_loop::EventLoop<()>,
     vk_engine::VertexInputDescriptors,
-    Scene,
 ) {
-    println!("Loading model...");
-    // let scene = Scene::test_scene_one();
-    let scene = Scene::test_scene_two();
-
     let vid = Vertex::input_descriptors();
     let did = vk_engine::VertexInputDescriptors {
         bindings: vec![*vk::VertexInputBindingDescription::builder()
@@ -112,7 +108,7 @@ pub fn make_custom_app(
     );
 
     app.update_descriptor_sets(scene.vertices.len() as u64, scene.indices.len() as u64);
-    (app, event_loop, vid, scene)
+    (app, event_loop, vid)
 }
 
 pub struct LineLightApp {

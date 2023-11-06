@@ -16,12 +16,15 @@ use datatypes::*;
 use input_handling::*;
 
 fn main() {
-    let shaders = linelight_vk::make_shaders("simple_shader.vert", "stochastic.frag");
+    let shaders = linelight_vk::make_shaders("simple_shader.vert", "analytic.frag");
     let debug_shaders = linelight_vk::make_shaders("debugger.vert", "debugger.frag");
     let ubo_bindings = linelight_vk::make_ubo_bindings();
+    println!("Loading model...");
+    // let scene = Scene::test_scene_one();
+    let scene = Scene::test_scene_two();
 
-    let (mut app, event_loop, vid, scene) =
-        linelight_vk::make_custom_app(&shaders, &debug_shaders, &ubo_bindings);
+    let (mut app, event_loop, vid) =
+        linelight_vk::make_custom_app(&shaders, &debug_shaders, &ubo_bindings, &scene);
 
     let mut current_frame = 0;
     let mut timer = std::time::Instant::now();

@@ -185,6 +185,53 @@ bool tri_tri_intersect_custom(
     return true;
 }
 
+// Records info on which parts of a linelight is visible as an array of intervals (t-values in [0,1])
+const int ARR_MAX = 8;
+struct IntervalArray {
+    int size;
+    vec2[ARR_MAX] data;
+};
+// No bounds checking for speed, just don't make mistakes ;)
+void remove_interval(inout IntervalArray int_arr, int i) {
+    int_arr.data[i] = int_arr.data[int_arr.size - 1];
+    int_arr.size -= 1;
+}
+void add_interval(inout IntervalArray int_arr, vec2 new_interval) {
+    if (int_arr.size < ARR_MAX) { // Avoid overflow
+        int_arr.data[int_arr.size] = new_interval;
+        int_arr.size += 1;
+    }
+}
+// Given an interval of occlusion, update the array to reflect the new visible intervals
+void occlude_intervals(inout IntervalArray int_arr, vec2 occ_int) {
+    // While loop for slightly better control
+    int i = 0;
+    while (i < int_arr.size) {
+        vec2 interval = int_arr.data[i];
+        
+        if (occ_int.x <= interval.x && occ_int.y >= interval.y) {
+            // Interval is fully occluded, remove it but do not increment `i`
+            // as the swapped-in element needs to be checked too
+            remove_interval(int_arr, i);
+            continue;
+        } else if (occ_int.x > interval.x && occ_int.y >= interval.y) {
+            // Right side is occluded, shrink to fit
+            int_arr.data[i].y = occ_int.x;
+        } else if (occ_int.x <= interval.x && occ_int.y < interval.y) {
+            // Left side is occluded, shrink to fit
+            int_arr.data[i].x = occ_int.y;
+        } else {
+            // Middle is occluded, shrink existing to the left and add new interval to the right
+            add_interval(int_arr, vec2(occ_int.y, interval.y));
+            int_arr.data[i].y = occ_int.x;
+        }
+        i += 1;
+    }
+}
+
+
+
+
 void main() {
     float I = 3.0;
     vec3 ambient = vec3(0.1);
@@ -193,33 +240,52 @@ void main() {
     vec3 l0 = to_world(l0_ubo);
     vec3 l1 = to_world(l1_ubo);
 
-    vec3 v0 = to_world(verts[4].pos);
-    vec3 v1 = to_world(verts[5].pos);
-    vec3 v2 = to_world(verts[6].pos);
+    // vec3 v0 = to_world(verts[4].pos);
+    // vec3 v1 = to_world(verts[5].pos);
+    // vec3 v2 = to_world(verts[6].pos);
 
     vec3 n = normalize(to_world(inNormal));
 
-    float irr;
-    vec2 interval;
-    vec3 is0, is1;
-    if (tri_tri_intersect_custom(l0, l1, pos + 0.001*n, v0, v1, v2, interval, is0, is1)) {
-        if (interval.x < 0.0) { // Lower edge occluded
-            I *= distance(is1,l1)/distance(l0,l1);
-            irr = sample_line_light_analytic(pos, n, is1, l1, I);
-        } else if (interval.y > 1.0) { // Upper edge occluded
-            I *= distance(l0,is0)/distance(l0,l1);
-            irr = sample_line_light_analytic(pos, n, l0, is0, I);
-        } else { // Middle partially occluded
-            float I0 = I*distance(l0,is0)/distance(l0,l1);
-            float I1 = I*distance(is1,l1)/distance(l0,l1);
-            irr =  sample_line_light_analytic(pos, n, l0, is0, I0);
-            irr += sample_line_light_analytic(pos, n, is1, l1, I1);
+    // Initialize interval array
+    IntervalArray int_arr;
+    int_arr.size = 0;
+    add_interval(int_arr, vec2(0.0,1.0));
+    
+    // For each triangle, compute whether it could occlude the linelight, if so, update intervals
+    // vec3 color = vec3(0.2);
+    for (int i = 0; i < indices.length(); i += 3) {
+        vec3 v0 = to_world(verts[indices[i]].pos);
+        vec3 v1 = to_world(verts[indices[i+1]].pos);
+        vec3 v2 = to_world(verts[indices[i+2]].pos);
+
+        vec3 is0, is1;
+        vec2 interval;
+        if (tri_tri_intersect_custom(l0,l1,pos+0.001*n, v0,v1,v2, interval, is0,is1)) {
+            occlude_intervals(int_arr, interval);
         }
-    } else {
-        irr = sample_line_light_analytic(pos, n, l0, l1, I);
     }
 
-    vec3 color = irr * vec3(1.0) + ambient;
+    vec3 color = vec3(int_arr.size / 4.0);
+
+    // float irr;
+    // if (tri_tri_intersect_custom(l0, l1, pos + 0.001*n, v0, v1, v2, interval, is0, is1)) {
+    //     if (interval.x < 0.0) { // Lower edge occluded
+    //         I *= distance(is1,l1)/distance(l0,l1);
+    //         irr = sample_line_light_analytic(pos, n, is1, l1, I);
+    //     } else if (interval.y > 1.0) { // Upper edge occluded
+    //         I *= distance(l0,is0)/distance(l0,l1);
+    //         irr = sample_line_light_analytic(pos, n, l0, is0, I);
+    //     } else { // Middle partially occluded
+    //         float I0 = I*distance(l0,is0)/distance(l0,l1);
+    //         float I1 = I*distance(is1,l1)/distance(l0,l1);
+    //         irr =  sample_line_light_analytic(pos, n, l0, is0, I0);
+    //         irr += sample_line_light_analytic(pos, n, is1, l1, I1);
+    //     }
+    // } else {
+    //     irr = sample_line_light_analytic(pos, n, l0, l1, I);
+    // }
+
+    // vec3 color = irr * vec3(1.0) + ambient;
 
     outColor = vec4(color,1.0);
 }
