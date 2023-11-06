@@ -37,7 +37,7 @@ impl Camera {
     pub fn rotate(&mut self, delta_phi: f32, delta_theta: f32) {
         self.angle_phi = (self.angle_phi + delta_phi) % (2.0 * PI);
         self.angle_theta =
-            (self.angle_theta + delta_theta).clamp(-PI / 2.0 * 9.0 / 10.0, PI / 2.0 * 9.0 / 10.0);
+            (self.angle_theta + delta_theta).clamp(-PI / 2.0001, PI / 2.0001);
         self.direction = Quat::from_rotation_y(self.angle_phi).mul_vec3(FORWARD);
         self.direction = Quat::from_axis_angle(self.direction.cross(self.up), self.angle_theta)
             .mul_vec3(self.direction);

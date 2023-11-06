@@ -54,7 +54,9 @@ fn main() {
     let mut inputs = Inputs::default();
     // Facing wrong way? Everything regarding view/projection is scuffed, gotta fix it at some point
     let mut camera = Camera::new();
-    camera.eye = vec3(0.0, -4.0, 5.0);
+    // camera.eye = vec3(0.0, -4.0, 5.0);
+    camera.eye = vec3(0.0, -6.0, 0.0);
+    camera.rotate(0.0, 3.1415/2.0);
 
     let model_pos = vec3(0.0, 0.0, 0.0);
     let model_scale = 0.5;
@@ -118,11 +120,11 @@ fn main() {
                 }
                 if inputs.move_right {
                     camera.eye +=
-                        camera.direction().cross(camera.up()) * delta_time * SPEED * delta_time
+                        camera.direction().cross(camera.up()).normalize_or_zero() * delta_time * SPEED * delta_time
                 }
                 if inputs.move_left {
                     camera.eye -=
-                        camera.direction().cross(camera.up()) * delta_time * SPEED * delta_time
+                        camera.direction().cross(camera.up()).normalize_or_zero() * delta_time * SPEED * delta_time
                 }
                 if inputs.move_up {
                     camera.eye -= camera.up() * delta_time * SPEED * delta_time
