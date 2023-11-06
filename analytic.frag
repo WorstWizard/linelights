@@ -213,16 +213,16 @@ void occlude_intervals(inout IntervalArray int_arr, vec2 occ_int) {
             // as the swapped-in element needs to be checked too
             remove_interval(int_arr, i);
             i--;
-        } else if (occ_int.x > interval.x && occ_int.y >= interval.y) {
-            // Right side is occluded, shrink to fit
-            int_arr.data[i].y = occ_int.x;
-        } else if (occ_int.x <= interval.x && occ_int.y < interval.y) {
-            // Left side is occluded, shrink to fit
-            int_arr.data[i].x = occ_int.y;
-        } else {
+        } else if (occ_int.x > interval.x && occ_int.y < interval.y) {
             // Middle is occluded, shrink existing to the left and add new interval to the right
             add_interval(int_arr, vec2(occ_int.y, interval.y));
             int_arr.data[i].y = occ_int.x;
+        } else if (occ_int.x > interval.x && occ_int.x < interval.y) {
+            // Right side is occluded, shrink to fit
+            int_arr.data[i].y = occ_int.x;
+        } else if (occ_int.y > interval.x && occ_int.y < interval.y) {
+            // Left side is occluded, shrink to fit
+            int_arr.data[i].x = occ_int.y;
         }
     }
 }
@@ -283,8 +283,8 @@ void main() {
         irr += sample_line_light_analytic(pos, n, p0, p1, fraction_of_light);
     }
 
-    vec3 color = heatmap(int_arr.size / 4.0 - 1.0);
-    // vec3 color = irr * vec3(1.0) + ambient;
+    // vec3 color = heatmap(int_arr.size / 4.0 - 1.0);
+    vec3 color = irr * vec3(1.0) + ambient;
 
     outColor = vec4(color,1.0);
 }

@@ -39,8 +39,7 @@ fn main() {
         light: scene.light,
         tri_e0: scene.light,
         tri_e1: scene.light,
-        isect0: scene.light,
-        isect1: scene.light,
+        intersections: [scene.light; 2*ARR_MAX],
     };
     unsafe {
         write_struct_to_buffer(
@@ -253,40 +252,29 @@ fn update_debug_overlay(
         };
         add_interval(&mut int_arr, vec2(0.0,1.0));
 
-        let mut tris = 0;
         for tri in scene.indices.chunks_exact(3) {
-            if int_arr.size == 0 { println!("early out"); break }
-
-            tris += 1;
+            if int_arr.size == 0 { break }
 
             let v0 = scene.vertices[tri[0] as usize].position;
             let v1 = scene.vertices[tri[1] as usize].position;
             let v2 = scene.vertices[tri[2] as usize].position;
 
             if let Some(interval) = tri_tri_intersect(l0,l1,point, v0,v1,v2) {
+                // println!("occluding interval: {}", interval);
                 occlude_intervals(&mut int_arr, interval);
             }
         }
 
-        println!("number of intervals: {}, Number of tris checked: {}", int_arr.size, tris);
+        // println!("number of intervals: {}", int_arr.size);
+        println!("intervals: {:?}", int_arr.data);
 
-        // let intersection = tri_tri_intersect(
-        //     l0,
-        //     l1,
-        //     point,
-        //     scene.vertices[4].position,
-        //     scene.vertices[5].position,
-        //     scene.vertices[6].position,
-        // );
-        // if let Some(interval) = intersection {
-        //     let isect0 = l * interval.x + l0;
-        //     let isect1 = l * interval.y + l0;
-        //     debug_overlay.isect0 = LineSegment(point, isect0);
-        //     debug_overlay.isect1 = LineSegment(point, isect1);
-        // } else {
-        //     debug_overlay.isect0 = LineSegment(l0, l1);
-        //     debug_overlay.isect1 = LineSegment(l0, l1);
-        // }
+        debug_overlay.intersections = [scene.light; 2*ARR_MAX];
+        for (i, interval) in int_arr.data.iter().enumerate() {
+            let i0 = l * interval.x + l0;
+            let i1 = l * interval.y + l0;
+            debug_overlay.intersections[2*i] = LineSegment(point, i0);
+            debug_overlay.intersections[2*i+1] = LineSegment(point, i1);
+        }
 
         unsafe {
             write_struct_to_buffer(
@@ -581,8 +569,8 @@ struct IntervalArray {
 }
 // No bounds checking for speed, just don't make mistakes ;)
 fn remove_interval(int_arr: &mut IntervalArray, i: usize) {
-    let last_interval = int_arr.data[int_arr.size - 1];
-    int_arr.data[i] = last_interval;
+    int_arr.data[i] = int_arr.data[int_arr.size - 1];
+    int_arr.data[int_arr.size - 1] = Vec2::ZERO; // just for debug overlay to look proper
     int_arr.size -= 1;
 }
 fn add_interval(int_arr: &mut IntervalArray, new_interval: Vec2) {
@@ -590,29 +578,36 @@ fn add_interval(int_arr: &mut IntervalArray, new_interval: Vec2) {
         int_arr.data[int_arr.size] = new_interval;
         int_arr.size += 1;
     }
+    // println!("new intervals {:?}", int_arr.data)
 }
 // Given an interval of occlusion, update the array to reflect the new visible intervals
 fn occlude_intervals(int_arr: &mut IntervalArray, occ_int: Vec2) {
     let mut i = 0;
     while i < int_arr.size {
+        // println!("index: {}", i);
         let interval = int_arr.data[i];
+        // println!("existing interval {}", interval);
         
         if occ_int.x <= interval.x && occ_int.y >= interval.y {
             // Interval is fully occluded, remove it but do not increment `i`
             // as the swapped-in element needs to be checked too
+            // println!("removing");
             remove_interval(int_arr, i);
             continue;
-        } else if occ_int.x > interval.x && occ_int.y >= interval.y {
-            // Right side is occluded, shrink to fit
-            int_arr.data[i].y = occ_int.x;
-        } else if occ_int.x <= interval.x && occ_int.y < interval.y {
-            // Left side is occluded, shrink to fit
-            int_arr.data[i].x = occ_int.y;
-        } else {
+        } else if occ_int.x > interval.x && occ_int.y < interval.y {
             // Middle is occluded, shrink existing to the left and add new interval to the right
+            // println!("add new");
             add_interval(int_arr, vec2(occ_int.y, interval.y));
             int_arr.data[i].y = occ_int.x;
-        }
+        } else if occ_int.x > interval.x && occ_int.x < interval.y {
+            // Right side is occluded, shrink to fit
+            // println!("shrink left");
+            int_arr.data[i].y = occ_int.x;
+        } else if occ_int.y > interval.x && occ_int.y < interval.y {
+            // Left side is occluded, shrink to fit
+            // println!("shrink right");
+            int_arr.data[i].x = occ_int.y;
+        } 
         i += 1;
     }
 }

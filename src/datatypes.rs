@@ -2,6 +2,8 @@ use std::f32::consts::PI;
 
 use glam::{Quat, Vec3};
 
+use crate::ARR_MAX;
+
 #[repr(C)]
 pub struct LineLightUniform {
     pub mvp: vk_engine::MVP,
@@ -55,8 +57,7 @@ pub struct DebugOverlay {
     pub light: LineSegment,
     pub tri_e0: LineSegment,
     pub tri_e1: LineSegment,
-    pub isect0: LineSegment,
-    pub isect1: LineSegment,
+    pub intersections: [LineSegment; 2*ARR_MAX],
 }
 impl DebugOverlay {
     pub fn num_verts() -> u32 {
