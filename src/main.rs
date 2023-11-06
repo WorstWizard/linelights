@@ -229,28 +229,64 @@ fn update_debug_overlay(
         .xyz()
         .normalize();
 
-    let collision = ray_scene_intersect(point_in_scene_space_0.xyz(), dir, scene);
-    if let Some(point) = collision {
+    if let Some(point) = ray_scene_intersect(point_in_scene_space_0.xyz(), dir, scene) {
+        let point = point - 0.00001*dir;
         let l0 = scene.light.0;
         let l1 = scene.light.1;
-        debug_overlay.tri_e0 = LineSegment(point, l0);
-        debug_overlay.tri_e1 = LineSegment(point, l1);
+        let l = l1-l0;
 
-        let intersection = tri_tri_intersect(
-            l0,
-            l1,
-            point,
-            scene.vertices[4].position,
-            scene.vertices[5].position,
-            scene.vertices[6].position,
-        );
-        if let Some((_interval, isect0, isect1)) = intersection {
-            debug_overlay.isect0 = LineSegment(point, isect0);
-            debug_overlay.isect1 = LineSegment(point, isect1);
+        // Draw lines from point to linelight end-points, blocked by geometry
+        if let Some(isect) = ray_scene_intersect(point, (l0-point).normalize(), scene) {
+            debug_overlay.tri_e0 = LineSegment(point, isect);
         } else {
-            debug_overlay.isect0 = LineSegment(l0, l1);
-            debug_overlay.isect1 = LineSegment(l0, l1);
+            debug_overlay.tri_e0 = LineSegment(point, l0);
         }
+        if let Some(isect) = ray_scene_intersect(point, (l1-point).normalize(), scene) {
+            debug_overlay.tri_e1 = LineSegment(point, isect);
+        } else {
+            debug_overlay.tri_e1 = LineSegment(point, l1);
+        }
+
+        let mut int_arr = IntervalArray {
+            size: 0,
+            data: [Vec2::ZERO; ARR_MAX]
+        };
+        add_interval(&mut int_arr, vec2(0.0,1.0));
+
+        let mut tris = 0;
+        for tri in scene.indices.chunks_exact(3) {
+            if int_arr.size == 0 { println!("early out"); break }
+
+            tris += 1;
+
+            let v0 = scene.vertices[tri[0] as usize].position;
+            let v1 = scene.vertices[tri[1] as usize].position;
+            let v2 = scene.vertices[tri[2] as usize].position;
+
+            if let Some(interval) = tri_tri_intersect(l0,l1,point, v0,v1,v2) {
+                occlude_intervals(&mut int_arr, interval);
+            }
+        }
+
+        println!("number of intervals: {}, Number of tris checked: {}", int_arr.size, tris);
+
+        // let intersection = tri_tri_intersect(
+        //     l0,
+        //     l1,
+        //     point,
+        //     scene.vertices[4].position,
+        //     scene.vertices[5].position,
+        //     scene.vertices[6].position,
+        // );
+        // if let Some(interval) = intersection {
+        //     let isect0 = l * interval.x + l0;
+        //     let isect1 = l * interval.y + l0;
+        //     debug_overlay.isect0 = LineSegment(point, isect0);
+        //     debug_overlay.isect1 = LineSegment(point, isect1);
+        // } else {
+        //     debug_overlay.isect0 = LineSegment(l0, l1);
+        //     debug_overlay.isect1 = LineSegment(l0, l1);
+        // }
 
         unsafe {
             write_struct_to_buffer(
@@ -453,25 +489,6 @@ fn compute_intervals_custom(
         isect1 = line_plane_intersect(n, pos, v2 - v1, v1);
     }
 
-    // // If distance from light to point is between distances from light to intersections, bad zone.
-    // let bad_zone = {
-    //     fn dist(n: Vec3, a: Vec3, p: Vec3) -> f32 {
-    //         let k = p-a;
-    //         let d = k.cross(n);
-    //         d.dot(d)
-    //     }
-
-    //     let mut d0 = dist(l, l0, isect0);
-    //     let mut d1 = dist(l, l0, isect1);
-    //     let dp = dist(l, l0, pos);
-    //     sort(&mut d0, &mut d1);
-    //     if d0 < dp && dp < d1 {
-    //         true
-    //     } else {
-    //         false
-    //     }
-    // };
-
     // Project intersections onto line t*(l1-l0) + l0 by computation of t-values
     let l = l1 - l0;
     let p = pos - l0;
@@ -511,7 +528,7 @@ fn tri_tri_intersect(
     v0: Vec3,
     v1: Vec3,
     v2: Vec3,
-) -> Option<(Vec2, Vec3, Vec3)> {
+) -> Option<Vec2> {
     // Plane equation for occluding triangle: dot(n, x) + d = 0
     let e0 = v1 - v0;
     let mut e1 = v2 - v0;
@@ -551,8 +568,51 @@ fn tri_tri_intersect(
         return None;
     }
 
-    let out0 = l * interval.x + l0;
-    let out1 = l * interval.y + l0;
+    Some(interval)
+}
 
-    Some((interval, out0, out1))
+
+
+// Records info on which parts of a linelight is visible as an array of intervals (t-values in [0,1])
+const ARR_MAX: usize = 8;
+struct IntervalArray {
+    pub size: usize,
+    pub data: [Vec2; ARR_MAX]
+}
+// No bounds checking for speed, just don't make mistakes ;)
+fn remove_interval(int_arr: &mut IntervalArray, i: usize) {
+    let last_interval = int_arr.data[int_arr.size - 1];
+    int_arr.data[i] = last_interval;
+    int_arr.size -= 1;
+}
+fn add_interval(int_arr: &mut IntervalArray, new_interval: Vec2) {
+    if int_arr.size < ARR_MAX { // Avoid overflow
+        int_arr.data[int_arr.size] = new_interval;
+        int_arr.size += 1;
+    }
+}
+// Given an interval of occlusion, update the array to reflect the new visible intervals
+fn occlude_intervals(int_arr: &mut IntervalArray, occ_int: Vec2) {
+    let mut i = 0;
+    while i < int_arr.size {
+        let interval = int_arr.data[i];
+        
+        if occ_int.x <= interval.x && occ_int.y >= interval.y {
+            // Interval is fully occluded, remove it but do not increment `i`
+            // as the swapped-in element needs to be checked too
+            remove_interval(int_arr, i);
+            continue;
+        } else if occ_int.x > interval.x && occ_int.y >= interval.y {
+            // Right side is occluded, shrink to fit
+            int_arr.data[i].y = occ_int.x;
+        } else if occ_int.x <= interval.x && occ_int.y < interval.y {
+            // Left side is occluded, shrink to fit
+            int_arr.data[i].x = occ_int.y;
+        } else {
+            // Middle is occluded, shrink existing to the left and add new interval to the right
+            add_interval(int_arr, vec2(occ_int.y, interval.y));
+            int_arr.data[i].y = occ_int.x;
+        }
+        i += 1;
+    }
 }

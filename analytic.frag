@@ -108,7 +108,7 @@ vec2 compute_intervals_custom(
     vec3 P = pos - l0;
 
     int i = 0;
-    int j = 1;
+    int j = 2;
 
     tmp1 = isect0[i]*P[j] - isect0[j]*P[i] + pos[i]*l0[j] - pos[j]*l0[i];
     tmp2 = isect0[i]*L[j] - isect0[j]*L[i] + pos[j]*L[i]  - pos[i]*L[j];
@@ -140,9 +140,9 @@ bool tri_tri_intersect_custom(
     vec3 v0,
     vec3 v1,
     vec3 v2,
-    out vec2 interval,
-    out vec3 out0,
-    out vec3 out1
+    out vec2 interval
+    // out vec3 out0,
+    // out vec3 out1
 ) {
     // Plane equation for occluding triangle: dot(n, x) + d = 0
     vec3 e0 = v1 - v0;
@@ -179,8 +179,8 @@ bool tri_tri_intersect_custom(
         return false;
     }
 
-    out0 = L * max(interval.x, 0.0) + l0;
-    out1 = L * min(interval.y, 1.0) + l0;
+    // out0 = L * max(interval.x, 0.0) + l0;
+    // out1 = L * min(interval.y, 1.0) + l0;
 
     return true;
 }
@@ -193,27 +193,26 @@ struct IntervalArray {
 };
 // No bounds checking for speed, just don't make mistakes ;)
 void remove_interval(inout IntervalArray int_arr, int i) {
-    int_arr.data[i] = int_arr.data[int_arr.size - 1];
-    int_arr.size -= 1;
+    vec2 last_interval = int_arr.data[int_arr.size - 1];
+    int_arr.data[i] = last_interval;
+    int_arr.size--;
 }
 void add_interval(inout IntervalArray int_arr, vec2 new_interval) {
     if (int_arr.size < ARR_MAX) { // Avoid overflow
         int_arr.data[int_arr.size] = new_interval;
-        int_arr.size += 1;
+        int_arr.size++;
     }
 }
 // Given an interval of occlusion, update the array to reflect the new visible intervals
 void occlude_intervals(inout IntervalArray int_arr, vec2 occ_int) {
-    // While loop for slightly better control
-    int i = 0;
-    while (i < int_arr.size) {
+    for (int i=0; i < int_arr.size; i++) {
         vec2 interval = int_arr.data[i];
         
         if (occ_int.x <= interval.x && occ_int.y >= interval.y) {
             // Interval is fully occluded, remove it but do not increment `i`
             // as the swapped-in element needs to be checked too
             remove_interval(int_arr, i);
-            continue;
+            i--;
         } else if (occ_int.x > interval.x && occ_int.y >= interval.y) {
             // Right side is occluded, shrink to fit
             int_arr.data[i].y = occ_int.x;
@@ -225,66 +224,66 @@ void occlude_intervals(inout IntervalArray int_arr, vec2 occ_int) {
             add_interval(int_arr, vec2(occ_int.y, interval.y));
             int_arr.data[i].y = occ_int.x;
         }
-        i += 1;
     }
 }
 
-
-
+// Simple heatmap from -1.0 to +1.0
+vec3 heatmap(float t) {
+    vec3 blue = vec3(0.0,0.0,1.0);
+    vec3 red = vec3(1.0,0.0,0.0);
+    vec3 white = vec3(1.0);
+    if (t > 0.0)
+        return mix(red,white,t);
+    return mix(red,blue,-t);
+}
 
 void main() {
     float I = 3.0;
     vec3 ambient = vec3(0.1);
 
     vec3 pos = to_world(inPos);
+    vec3 n = normalize(to_world(inNormal));
+
     vec3 l0 = to_world(l0_ubo);
     vec3 l1 = to_world(l1_ubo);
-
-    // vec3 v0 = to_world(verts[4].pos);
-    // vec3 v1 = to_world(verts[5].pos);
-    // vec3 v2 = to_world(verts[6].pos);
-
-    vec3 n = normalize(to_world(inNormal));
+    vec3 L = l1 - l0;
 
     // Initialize interval array
     IntervalArray int_arr;
     int_arr.size = 0;
     add_interval(int_arr, vec2(0.0,1.0));
+
+    vec3 l0_eff = l0;
+    vec3 l1_eff = l1;
     
     // For each triangle, compute whether it could occlude the linelight, if so, update intervals
-    // vec3 color = vec3(0.2);
     for (int i = 0; i < indices.length(); i += 3) {
+        if (int_arr.size == 0) break; // Early stop
+
         vec3 v0 = to_world(verts[indices[i]].pos);
         vec3 v1 = to_world(verts[indices[i+1]].pos);
         vec3 v2 = to_world(verts[indices[i+2]].pos);
 
-        vec3 is0, is1;
         vec2 interval;
-        if (tri_tri_intersect_custom(l0,l1,pos+0.001*n, v0,v1,v2, interval, is0,is1)) {
+        if (tri_tri_intersect_custom(l0,l1,pos+0.001*n, v0,v1,v2, interval)) {
             occlude_intervals(int_arr, interval);
+            if (int_arr.size == 1) { // Shrink light to the only visible interval to speed up future intersections
+                l0_eff = max(0.0, interval.x) * L + l0;
+                l0_eff = min(1.0, interval.y) * L + l0;
+            }
         }
     }
 
-    vec3 color = vec3(int_arr.size / 4.0);
+    float irr = 0.0;
+    for (int i = 0; i < int_arr.size; i++) {
+        vec2 interval = int_arr.data[i];
+        vec3 p0 = L * interval.x + l0;
+        vec3 p1 = L * interval.y + l0;
+        float fraction_of_light = I * (interval.y - interval.x);
+        irr += sample_line_light_analytic(pos, n, p0, p1, fraction_of_light);
+    }
 
-    // float irr;
-    // if (tri_tri_intersect_custom(l0, l1, pos + 0.001*n, v0, v1, v2, interval, is0, is1)) {
-    //     if (interval.x < 0.0) { // Lower edge occluded
-    //         I *= distance(is1,l1)/distance(l0,l1);
-    //         irr = sample_line_light_analytic(pos, n, is1, l1, I);
-    //     } else if (interval.y > 1.0) { // Upper edge occluded
-    //         I *= distance(l0,is0)/distance(l0,l1);
-    //         irr = sample_line_light_analytic(pos, n, l0, is0, I);
-    //     } else { // Middle partially occluded
-    //         float I0 = I*distance(l0,is0)/distance(l0,l1);
-    //         float I1 = I*distance(is1,l1)/distance(l0,l1);
-    //         irr =  sample_line_light_analytic(pos, n, l0, is0, I0);
-    //         irr += sample_line_light_analytic(pos, n, is1, l1, I1);
-    //     }
-    // } else {
-    //     irr = sample_line_light_analytic(pos, n, l0, l1, I);
-    // }
-
+    vec3 color = heatmap(int_arr.size / 4.0 - 1.0);
     // vec3 color = irr * vec3(1.0) + ambient;
 
     outColor = vec4(color,1.0);
