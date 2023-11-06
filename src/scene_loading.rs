@@ -108,7 +108,6 @@ impl Scene {
                     .map(|chunk| transform_mat.transform_vector3(unflatten_vec3(&chunk))),
             );
         }
-        println!("normals {:?}", normals);
         let vertices = positions
             .into_iter()
             .zip(normals)
