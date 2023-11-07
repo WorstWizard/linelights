@@ -10,6 +10,8 @@ use std::mem::ManuallyDrop;
 use std::rc::Rc;
 use vk_engine::{engine_core, shaders};
 
+use tracy_client::span;
+
 use crate::datatypes::*;
 use crate::scene_loading::*;
 
@@ -39,6 +41,7 @@ impl Vertex {
 }
 
 pub fn make_shaders(vert_path: &str, frag_path: &str) -> Vec<vk_engine::shaders::Shader> {
+    let _span = span!("make_shaders");
     println!("Compiling shaders...");
     let shaders = vec![
         shaders::compile_shader(vert_path, None, shaders::ShaderType::Vertex)
@@ -79,6 +82,8 @@ pub fn make_custom_app(
     winit::event_loop::EventLoop<()>,
     vk_engine::VertexInputDescriptors,
 ) {
+    let _span = span!("make_app");
+
     let vid = Vertex::input_descriptors();
     let did = vk_engine::VertexInputDescriptors {
         bindings: vec![*vk::VertexInputBindingDescription::builder()
@@ -156,6 +161,8 @@ impl LineLightApp {
         vertices: &Vec<Vertex>,
         indices: &Vec<u32>,
     ) -> Self {
+        let _span = span!("LineLightApp::new()");
+
         let entry = Box::new(unsafe { ash::Entry::load() }.unwrap());
         if engine_core::VALIDATION_ENABLED && !engine_core::check_validation_layer_support(&entry) {
             panic!("Validation layer requested but not available!");

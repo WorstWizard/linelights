@@ -7,6 +7,8 @@ use vk_engine::engine_core::write_struct_to_buffer;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::ControlFlow;
 
+use tracy_client::{self, span, frame_mark};
+
 mod datatypes;
 mod input_handling;
 mod linelight_vk;
@@ -15,8 +17,16 @@ mod scene_loading;
 use datatypes::*;
 use input_handling::*;
 
+// Some config options
+const SPEED: f32 = 100.0;
+const ENABLE_DEBUG: bool = true;
+
 fn main() {
-    let shaders = linelight_vk::make_shaders("simple_shader.vert", "analytic.frag");
+    // Connect to tracy for performance statistics
+    let _client = tracy_client::Client::start();
+    let _span = span!("init");
+
+    let shaders = linelight_vk::make_shaders("simple_shader.vert", "plain.frag");
     let debug_shaders = linelight_vk::make_shaders("debugger.vert", "debugger.frag");
     let ubo_bindings = linelight_vk::make_ubo_bindings();
     println!("Loading model...");
@@ -28,11 +38,6 @@ fn main() {
 
     let mut current_frame = 0;
     let mut timer = std::time::Instant::now();
-
-    // const ROT_P_SEC: f32 = -0.00;
-    // const TWO_PI: f32 = 2.0 * 3.1415926535;
-    const SPEED: f32 = 100.0;
-    const ENABLE_DEBUG: bool = true;
 
     // Stuff for debugging overlay
     let mut debug_overlay = DebugOverlay {
@@ -192,6 +197,7 @@ fn main() {
 
                 timer = std::time::Instant::now();
                 current_frame = (current_frame + 1) % vk_engine::engine_core::MAX_FRAMES_IN_FLIGHT;
+                frame_mark();
             }
             _ => (),
         }
