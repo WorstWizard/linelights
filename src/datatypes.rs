@@ -38,8 +38,7 @@ impl Camera {
     }
     pub fn rotate(&mut self, delta_phi: f32, delta_theta: f32) {
         self.angle_phi = (self.angle_phi + delta_phi) % (2.0 * PI);
-        self.angle_theta =
-            (self.angle_theta + delta_theta).clamp(-PI / 2.0001, PI / 2.0001);
+        self.angle_theta = (self.angle_theta + delta_theta).clamp(-PI / 2.0001, PI / 2.0001);
         self.direction = Quat::from_rotation_y(self.angle_phi).mul_vec3(FORWARD);
         self.direction = Quat::from_axis_angle(self.direction.cross(self.up), self.angle_theta)
             .mul_vec3(self.direction);
@@ -57,7 +56,7 @@ pub struct DebugOverlay {
     pub light: LineSegment,
     pub tri_e0: LineSegment,
     pub tri_e1: LineSegment,
-    pub intersections: [LineSegment; 2*ARR_MAX],
+    pub intersections: [LineSegment; 2 * ARR_MAX],
 }
 impl DebugOverlay {
     pub fn num_verts() -> u32 {

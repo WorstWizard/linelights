@@ -7,7 +7,7 @@ use vk_engine::engine_core::write_struct_to_buffer;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::ControlFlow;
 
-use tracy_client::{self, span, frame_mark};
+use tracy_client::{self, frame_mark, span};
 
 mod datatypes;
 mod input_handling;
@@ -19,7 +19,7 @@ use input_handling::*;
 
 // Some config options
 const SPEED: f32 = 100.0;
-const ENABLE_DEBUG: bool = true;
+const ENABLE_DEBUG: bool = false;
 
 fn main() {
     // Connect to tracy for performance statistics
@@ -44,7 +44,7 @@ fn main() {
         light: scene.light,
         tri_e0: scene.light,
         tri_e1: scene.light,
-        intersections: [scene.light; 2*ARR_MAX],
+        intersections: [scene.light; 2 * ARR_MAX],
     };
     unsafe {
         write_struct_to_buffer(
@@ -60,7 +60,7 @@ fn main() {
     let mut camera = Camera::new();
     // camera.eye = vec3(0.0, -4.0, 5.0);
     camera.eye = vec3(0.0, -6.0, 0.0);
-    camera.rotate(0.0, 3.1415/2.0);
+    camera.rotate(0.0, 3.1415 / 2.0);
 
     let model_pos = vec3(0.0, 0.0, 0.0);
     let model_scale = 0.5;
@@ -75,6 +75,16 @@ fn main() {
     };
 
     drop(_span);
+
+    let (timestamp, period) = app.get_immediate_timestamp();
+    let _gpu_ctx = _client
+        .new_gpu_context(
+            Some("GPU Context"),
+            tracy_client::GpuContextType::Vulkan,
+            timestamp,
+            period,
+        )
+        .unwrap();
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
@@ -126,12 +136,16 @@ fn main() {
                     camera.eye -= camera.direction() * delta_time * SPEED * delta_time
                 }
                 if inputs.move_right {
-                    camera.eye +=
-                        camera.direction().cross(camera.up()).normalize_or_zero() * delta_time * SPEED * delta_time
+                    camera.eye += camera.direction().cross(camera.up()).normalize_or_zero()
+                        * delta_time
+                        * SPEED
+                        * delta_time
                 }
                 if inputs.move_left {
-                    camera.eye -=
-                        camera.direction().cross(camera.up()).normalize_or_zero() * delta_time * SPEED * delta_time
+                    camera.eye -= camera.direction().cross(camera.up()).normalize_or_zero()
+                        * delta_time
+                        * SPEED
+                        * delta_time
                 }
                 if inputs.move_up {
                     camera.eye -= camera.up() * delta_time * SPEED * delta_time
@@ -157,6 +171,8 @@ fn main() {
                     mvp: mvp.clone(),
                 };
 
+                let mut _span;
+
                 unsafe {
                     write_struct_to_buffer(
                         app.uniform_buffers[current_frame]
@@ -164,6 +180,13 @@ fn main() {
                             .expect("Uniform buffer not mapped!"),
                         &ubo as *const LineLightUniform,
                     );
+
+                    // Record first timestamp immediately before GPU work
+                    app.reset_timestamps(app.command_buffers[current_frame]);
+                    app.record_immediate_timestamp(app.command_buffers[current_frame], 0);
+                    _span = _gpu_ctx
+                        .span_alloc("Drawing", "event_loop", "main.rs", 184)
+                        .unwrap();
 
                     if ENABLE_DEBUG {
                         app.record_command_buffer(current_frame, |app| {
@@ -187,8 +210,14 @@ fn main() {
                         })
                     }
                 }
-
                 app.submit_drawing_command_buffer(current_frame);
+
+                // Record second timestamp immediately after GPU work
+                app.record_immediate_timestamp(app.command_buffers[current_frame], 1);
+                _span.end_zone();
+
+                let timestamps = app.get_timestamps();
+                _span.upload_timestamp(timestamps[0], timestamps[1]);
 
                 match app.present_image(img_index, app.sync.render_finished[current_frame]) {
                     Ok(true) | Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
@@ -238,18 +267,18 @@ fn update_debug_overlay(
         .normalize();
 
     if let Some(point) = ray_scene_intersect(point_in_scene_space_0.xyz(), dir, scene) {
-        let point = point - 0.00001*dir;
+        let point = point - 0.00001 * dir;
         let l0 = scene.light.0;
         let l1 = scene.light.1;
-        let l = l1-l0;
+        let l = l1 - l0;
 
         // Draw lines from point to linelight end-points, blocked by geometry
-        if let Some(isect) = ray_scene_intersect(point, (l0-point).normalize(), scene) {
+        if let Some(isect) = ray_scene_intersect(point, (l0 - point).normalize(), scene) {
             debug_overlay.tri_e0 = LineSegment(point, isect);
         } else {
             debug_overlay.tri_e0 = LineSegment(point, l0);
         }
-        if let Some(isect) = ray_scene_intersect(point, (l1-point).normalize(), scene) {
+        if let Some(isect) = ray_scene_intersect(point, (l1 - point).normalize(), scene) {
             debug_overlay.tri_e1 = LineSegment(point, isect);
         } else {
             debug_overlay.tri_e1 = LineSegment(point, l1);
@@ -257,18 +286,20 @@ fn update_debug_overlay(
 
         let mut int_arr = IntervalArray {
             size: 0,
-            data: [Vec2::ZERO; ARR_MAX]
+            data: [Vec2::ZERO; ARR_MAX],
         };
-        add_interval(&mut int_arr, vec2(0.0,1.0));
+        add_interval(&mut int_arr, vec2(0.0, 1.0));
 
         for tri in scene.indices.chunks_exact(3) {
-            if int_arr.size == 0 { break }
+            if int_arr.size == 0 {
+                break;
+            }
 
             let v0 = scene.vertices[tri[0] as usize].position;
             let v1 = scene.vertices[tri[1] as usize].position;
             let v2 = scene.vertices[tri[2] as usize].position;
 
-            if let Some(interval) = tri_tri_intersect(l0,l1,point, v0,v1,v2) {
+            if let Some(interval) = tri_tri_intersect(l0, l1, point, v0, v1, v2) {
                 // println!("occluding interval: {}", interval);
                 occlude_intervals(&mut int_arr, interval);
             }
@@ -277,12 +308,12 @@ fn update_debug_overlay(
         // println!("number of intervals: {}", int_arr.size);
         println!("intervals: {:?}", int_arr.data);
 
-        debug_overlay.intersections = [scene.light; 2*ARR_MAX];
+        debug_overlay.intersections = [scene.light; 2 * ARR_MAX];
         for (i, interval) in int_arr.data.iter().enumerate() {
             let i0 = l * interval.x + l0;
             let i1 = l * interval.y + l0;
-            debug_overlay.intersections[2*i] = LineSegment(point, i0);
-            debug_overlay.intersections[2*i+1] = LineSegment(point, i1);
+            debug_overlay.intersections[2 * i] = LineSegment(point, i0);
+            debug_overlay.intersections[2 * i + 1] = LineSegment(point, i1);
         }
 
         unsafe {
@@ -302,6 +333,7 @@ fn drawing_commands(
     swapchain_image_index: u32,
     num_indices: u32,
     num_debug_verts: u32,
+    // gpu_ctx: Option<&tracy_client::GpuContext>,
 ) {
     //Start render pass
     let render_area = vk::Rect2D::builder()
@@ -319,6 +351,13 @@ fn drawing_commands(
         .render_area(*render_area)
         .clear_values(&clear_values);
     unsafe {
+        app.logical_device.cmd_reset_query_pool(
+            app.command_buffers[buffer_index],
+            app.query_pool,
+            0,
+            2,
+        );
+
         app.logical_device.cmd_begin_render_pass(
             app.command_buffers[buffer_index],
             &renderpass_begin_info,
@@ -353,6 +392,15 @@ fn drawing_commands(
         );
 
         // Drawing commands begin
+        // let _span = if let Some(ctx) = gpu_ctx {
+        //     app.logical_device.cmd_write_timestamp(
+        //         app.command_buffers[buffer_index],
+        //         vk::PipelineStageFlags::TOP_OF_PIPE,
+        //         app.query_pool,
+        //         0,
+        //     );
+        //     Some(ctx.span_alloc("Drawing", "drawing_commands", "main.rs", 387).unwrap())
+        // } else { None };
         app.logical_device.cmd_draw_indexed(
             app.command_buffers[buffer_index],
             num_indices,
@@ -361,24 +409,41 @@ fn drawing_commands(
             0,
             0,
         );
+        // if let Some(mut span) = _span {
+        //     app.logical_device.cmd_write_timestamp(
+        //         app.command_buffers[buffer_index],
+        //         vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+        //         app.query_pool,
+        //         1,
+        //     );
+        //     span.end_zone();
+        // }
+
         // Debug drawing subpass
         app.logical_device.cmd_next_subpass(
             app.command_buffers[buffer_index],
             vk::SubpassContents::INLINE,
         );
-        app.logical_device.cmd_bind_vertex_buffers(
-            app.command_buffers[buffer_index],
-            0,
-            &[app.debug_buffer.buffer],
-            &[0],
-        );
-        app.logical_device.cmd_bind_pipeline(
-            app.command_buffers[buffer_index],
-            vk::PipelineBindPoint::GRAPHICS,
-            app.debug_pipeline,
-        );
-        app.logical_device
-            .cmd_draw(app.command_buffers[buffer_index], num_debug_verts, 1, 0, 0);
+        if ENABLE_DEBUG {
+            app.logical_device.cmd_bind_vertex_buffers(
+                app.command_buffers[buffer_index],
+                0,
+                &[app.debug_buffer.buffer],
+                &[0],
+            );
+            app.logical_device.cmd_bind_pipeline(
+                app.command_buffers[buffer_index],
+                vk::PipelineBindPoint::GRAPHICS,
+                app.debug_pipeline,
+            );
+            app.logical_device.cmd_draw(
+                app.command_buffers[buffer_index],
+                num_debug_verts,
+                1,
+                0,
+                0,
+            );
+        }
         // Drawing commands end
 
         //End the render pass
@@ -518,14 +583,7 @@ fn compute_intervals_custom(
     sort(&mut t0, &mut t1);
     vec2(t0, t1)
 }
-fn tri_tri_intersect(
-    l0: Vec3,
-    l1: Vec3,
-    pos: Vec3,
-    v0: Vec3,
-    v1: Vec3,
-    v2: Vec3,
-) -> Option<Vec2> {
+fn tri_tri_intersect(l0: Vec3, l1: Vec3, pos: Vec3, v0: Vec3, v1: Vec3, v2: Vec3) -> Option<Vec2> {
     // Plane equation for occluding triangle: dot(n, x) + d = 0
     let e0 = v1 - v0;
     let mut e1 = v2 - v0;
@@ -568,13 +626,11 @@ fn tri_tri_intersect(
     Some(interval)
 }
 
-
-
 // Records info on which parts of a linelight is visible as an array of intervals (t-values in [0,1])
 const ARR_MAX: usize = 8;
 struct IntervalArray {
     pub size: usize,
-    pub data: [Vec2; ARR_MAX]
+    pub data: [Vec2; ARR_MAX],
 }
 // No bounds checking for speed, just don't make mistakes ;)
 fn remove_interval(int_arr: &mut IntervalArray, i: usize) {
@@ -583,7 +639,8 @@ fn remove_interval(int_arr: &mut IntervalArray, i: usize) {
     int_arr.size -= 1;
 }
 fn add_interval(int_arr: &mut IntervalArray, new_interval: Vec2) {
-    if int_arr.size < ARR_MAX { // Avoid overflow
+    if int_arr.size < ARR_MAX {
+        // Avoid overflow
         int_arr.data[int_arr.size] = new_interval;
         int_arr.size += 1;
     }
@@ -596,7 +653,7 @@ fn occlude_intervals(int_arr: &mut IntervalArray, occ_int: Vec2) {
         // println!("index: {}", i);
         let interval = int_arr.data[i];
         // println!("existing interval {}", interval);
-        
+
         if occ_int.x <= interval.x && occ_int.y >= interval.y {
             // Interval is fully occluded, remove it but do not increment `i`
             // as the swapped-in element needs to be checked too
@@ -616,7 +673,7 @@ fn occlude_intervals(int_arr: &mut IntervalArray, occ_int: Vec2) {
             // Left side is occluded, shrink to fit
             // println!("shrink right");
             int_arr.data[i].x = occ_int.y;
-        } 
+        }
         i += 1;
     }
 }

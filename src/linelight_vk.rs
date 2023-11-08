@@ -76,7 +76,7 @@ pub fn make_custom_app(
     shaders: &[vk_engine::shaders::Shader],
     debug_shaders: &[vk_engine::shaders::Shader],
     ubo_bindings: &[vk::DescriptorSetLayoutBinding],
-    scene: &Scene
+    scene: &Scene,
 ) -> (
     LineLightApp,
     winit::event_loop::EventLoop<()>,
@@ -137,14 +137,15 @@ pub struct LineLightApp {
     descriptor_set_layout: vk::DescriptorSetLayout,
     _descriptor_pool: vk::DescriptorPool,
     present_queue: vk::Queue,
-    graphics_queue: vk::Queue,
-    _command_pool: vk::CommandPool,
+    pub graphics_queue: vk::Queue,
+    pub command_pool: vk::CommandPool,
     pub sync: engine_core::SyncPrims,
     surface_loader: ash::extensions::khr::Surface,
     surface: vk::SurfaceKHR,
     window: winit::window::Window,
     debug_loader: DebugUtils,
     debug_messenger: vk::DebugUtilsMessengerEXT,
+    pub query_pool: vk::QueryPool,
     pub logical_device: Rc<ash::Device>,
     instance: Box<ash::Instance>,
 }
@@ -155,13 +156,20 @@ impl Drop for LineLightApp {
             self.logical_device.device_wait_idle().unwrap();
 
             for i in 0..engine_core::MAX_FRAMES_IN_FLIGHT {
-                self.logical_device.destroy_semaphore(self.sync.image_available[i], None);
-                self.logical_device.destroy_semaphore(self.sync.render_finished[i], None);
-                self.logical_device.destroy_fence(self.sync.in_flight[i], None);
+                self.logical_device
+                    .destroy_semaphore(self.sync.image_available[i], None);
+                self.logical_device
+                    .destroy_semaphore(self.sync.render_finished[i], None);
+                self.logical_device
+                    .destroy_fence(self.sync.in_flight[i], None);
             }
-            self.logical_device.destroy_descriptor_pool(self._descriptor_pool, None);
-            self.logical_device.destroy_command_pool(self._command_pool, None);
-            
+            self.logical_device
+                .destroy_descriptor_pool(self._descriptor_pool, None);
+            self.logical_device
+                .destroy_command_pool(self.command_pool, None);
+            self.logical_device
+                .destroy_query_pool(self.query_pool, None);
+
             ManuallyDrop::drop(&mut self.debug_buffer);
             ManuallyDrop::drop(&mut self.vertex_buffer);
             ManuallyDrop::drop(&mut self.index_buffer);
@@ -174,7 +182,8 @@ impl Drop for LineLightApp {
             self.surface_loader.destroy_surface(self.surface, None);
 
             if engine_core::VALIDATION_ENABLED {
-                self.debug_loader.destroy_debug_utils_messenger(self.debug_messenger, None);
+                self.debug_loader
+                    .destroy_debug_utils_messenger(self.debug_messenger, None);
             }
 
             self.instance.destroy_instance(None);
@@ -521,9 +530,17 @@ impl LineLightApp {
         //// Create semaphores for in-render-pass synchronization
         let sync = engine_core::create_sync_primitives(&logical_device);
 
+        let query_pool = {
+            let timestamp_pool_create_info = vk::QueryPoolCreateInfo::builder()
+                .query_count(2)
+                .query_type(vk::QueryType::TIMESTAMP)
+                .pipeline_statistics(vk::QueryPipelineStatisticFlags::empty());
+            unsafe { logical_device.create_query_pool(&timestamp_pool_create_info, None) }.unwrap()
+        };
+
         LineLightApp {
             command_buffers,
-            _command_pool: command_pool,
+            command_pool,
             graphics_queue,
             logical_device,
             present_queue,
@@ -543,6 +560,7 @@ impl LineLightApp {
             graphics_pipeline_layout,
             debug_pipeline,
             debug_pipeline_layout,
+            query_pool,
             image_views,
             render_pass,
             surface,
@@ -785,6 +803,105 @@ impl LineLightApp {
         }
         self.swapchain_loader
             .destroy_swapchain(self.swapchain, None);
+    }
+
+    pub fn reset_timestamps(&self, command_buffer: vk::CommandBuffer) {
+        let recording_info = vk::CommandBufferBeginInfo::builder()
+            .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
+        let submit_info = *vk::SubmitInfo::builder().command_buffers(&[command_buffer]);
+        unsafe {
+            self.logical_device
+                .begin_command_buffer(command_buffer, &recording_info)
+                .unwrap();
+            self.logical_device
+                .cmd_reset_query_pool(command_buffer, self.query_pool, 0, 2);
+            self.logical_device
+                .end_command_buffer(command_buffer)
+                .unwrap();
+            self.logical_device
+                .queue_submit(self.graphics_queue, &[submit_info], vk::Fence::null())
+                .unwrap();
+            self.logical_device
+                .queue_wait_idle(self.graphics_queue)
+                .unwrap();
+        }
+    }
+    pub fn get_immediate_timestamp(&self) -> (i64, f32) {
+        let (physical_device, _) =
+            engine_core::find_physical_device(&self.instance, &self.surface_loader, &self.surface);
+        let props = unsafe {
+            self.instance
+                .get_physical_device_properties(physical_device)
+        };
+        let period = props.limits.timestamp_period;
+        let mut timestamp: [i64; 1] = [0];
+        unsafe {
+            engine_core::immediate_commands(
+                &self.logical_device,
+                self.command_pool,
+                self.graphics_queue,
+                |buffer| {
+                    self.logical_device.cmd_reset_query_pool(buffer, self.query_pool, 0, 2);
+                    self.logical_device.cmd_write_timestamp(
+                        buffer,
+                        vk::PipelineStageFlags::TOP_OF_PIPE,
+                        self.query_pool,
+                        0,
+                    );
+                    self.logical_device
+                        .get_query_pool_results(
+                            self.query_pool,
+                            0,
+                            1,
+                            &mut timestamp,
+                            vk::QueryResultFlags::TYPE_64 | vk::QueryResultFlags::WAIT,
+                        )
+                        .expect("Couldn't get timestamp")
+                },
+            )
+        }
+
+        (timestamp[0], period)
+    }
+    pub fn record_immediate_timestamp(&self, command_buffer: vk::CommandBuffer, query_id: u32) {
+        // Reuse the current command buffer instead of reallocating (to get accurate results?)
+        let recording_info = vk::CommandBufferBeginInfo::builder()
+            .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
+        let submit_info = *vk::SubmitInfo::builder().command_buffers(&[command_buffer]);
+        unsafe {
+            self.logical_device
+                .begin_command_buffer(command_buffer, &recording_info)
+                .unwrap();
+            self.logical_device.cmd_write_timestamp(
+                command_buffer,
+                vk::PipelineStageFlags::TOP_OF_PIPE,
+                self.query_pool,
+                query_id,
+            );
+            self.logical_device
+                .end_command_buffer(command_buffer)
+                .unwrap();
+            self.logical_device
+                .queue_submit(self.graphics_queue, &[submit_info], vk::Fence::null())
+                .unwrap();
+            self.logical_device
+                .queue_wait_idle(self.graphics_queue)
+                .unwrap();
+        }
+    }
+    pub fn get_timestamps(&self) -> [i64; 2] {
+        let mut timestamps: [i64; 2] = [0, 0];
+        unsafe {
+            self.logical_device.get_query_pool_results(
+                self.query_pool,
+                0,
+                2,
+                &mut timestamps,
+                vk::QueryResultFlags::TYPE_64 | vk::QueryResultFlags::WAIT,
+            )
+        }
+        .expect("Couldn't get timestamp");
+        timestamps
     }
 }
 
