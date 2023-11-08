@@ -151,6 +151,7 @@ pub struct LineLightApp {
 impl Drop for LineLightApp {
     fn drop(&mut self) {
         unsafe {
+            let _span = span!("cleanup");
             self.logical_device.device_wait_idle().unwrap();
 
             for i in 0..engine_core::MAX_FRAMES_IN_FLIGHT {

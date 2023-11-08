@@ -73,6 +73,9 @@ fn main() {
         view: Mat4::IDENTITY,
         projection: Mat4::IDENTITY,
     };
+
+    drop(_span);
+
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
         match event {
