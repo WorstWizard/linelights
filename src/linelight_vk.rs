@@ -121,6 +121,8 @@ pub struct LineLightApp {
     swapchain: vk::SwapchainKHR,
     pub swapchain_extent: vk::Extent2D,
     image_views: Vec<vk::ImageView>,
+    pub framebuffers: Vec<vk::Framebuffer>,
+    pub command_buffers: Vec<vk::CommandBuffer>,
     pub render_pass: vk::RenderPass,
     pub graphics_pipeline: vk::Pipeline,
     pub graphics_pipeline_layout: vk::PipelineLayout,
@@ -129,22 +131,54 @@ pub struct LineLightApp {
     pub debug_buffer: ManuallyDrop<engine_core::ManagedBuffer>,
     pub vertex_buffer: ManuallyDrop<engine_core::ManagedBuffer>,
     pub index_buffer: ManuallyDrop<engine_core::ManagedBuffer>,
+    pub uniform_buffers: ManuallyDrop<Vec<vk_engine::engine_core::ManagedBuffer>>,
     depth_image: ManuallyDrop<engine_core::ManagedImage>,
     pub descriptor_sets: Vec<vk::DescriptorSet>,
     descriptor_set_layout: vk::DescriptorSetLayout,
     _descriptor_pool: vk::DescriptorPool,
-    pub framebuffers: Vec<vk::Framebuffer>,
     present_queue: vk::Queue,
     graphics_queue: vk::Queue,
-    pub command_buffers: Vec<vk::CommandBuffer>,
     _command_pool: vk::CommandPool,
-    pub uniform_buffers: Vec<vk_engine::engine_core::ManagedBuffer>,
     pub sync: engine_core::SyncPrims,
     surface_loader: ash::extensions::khr::Surface,
     surface: vk::SurfaceKHR,
     window: winit::window::Window,
+    debug_loader: DebugUtils,
+    debug_messenger: vk::DebugUtilsMessengerEXT,
     pub logical_device: Rc<ash::Device>,
     instance: Box<ash::Instance>,
+}
+impl Drop for LineLightApp {
+    fn drop(&mut self) {
+        unsafe {
+            self.logical_device.device_wait_idle().unwrap();
+
+            for i in 0..engine_core::MAX_FRAMES_IN_FLIGHT {
+                self.logical_device.destroy_semaphore(self.sync.image_available[i], None);
+                self.logical_device.destroy_semaphore(self.sync.render_finished[i], None);
+                self.logical_device.destroy_fence(self.sync.in_flight[i], None);
+            }
+            self.logical_device.destroy_descriptor_pool(self._descriptor_pool, None);
+            self.logical_device.destroy_command_pool(self._command_pool, None);
+            
+            ManuallyDrop::drop(&mut self.debug_buffer);
+            ManuallyDrop::drop(&mut self.vertex_buffer);
+            ManuallyDrop::drop(&mut self.index_buffer);
+            ManuallyDrop::drop(&mut self.uniform_buffers);
+            ManuallyDrop::drop(&mut self.depth_image);
+
+            self.clean_swapchain_and_dependants();
+
+            self.logical_device.destroy_device(None);
+            self.surface_loader.destroy_surface(self.surface, None);
+
+            if engine_core::VALIDATION_ENABLED {
+                self.debug_loader.destroy_debug_utils_messenger(self.debug_messenger, None);
+            }
+
+            self.instance.destroy_instance(None);
+        }
+    }
 }
 
 type VertexType = Vertex;
@@ -201,7 +235,7 @@ impl LineLightApp {
             unsafe { entry.create_instance(&instance_info, None) }
                 .expect("Failed to create Vulkan instance!"),
         );
-        let (_debug_loader, _messenger) = if engine_core::VALIDATION_ENABLED {
+        let (debug_loader, debug_messenger) = if engine_core::VALIDATION_ENABLED {
             //Messenger attached
             let debug_loader = DebugUtils::new(&entry, &instance);
             let messenger =
@@ -262,7 +296,7 @@ impl LineLightApp {
 
         //// Graphics pipeline
         let render_pass = render_pass(&logical_device, image_format);
-        let (graphics_pipeline, graphics_pipeline_layout, _descriptor_set_layout) = main_pipeline(
+        let (graphics_pipeline, graphics_pipeline_layout, descriptor_set_layout) = main_pipeline(
             &logical_device,
             render_pass,
             swapchain_extent,
@@ -271,13 +305,13 @@ impl LineLightApp {
             descriptor_set_bindings,
             [0.0],
         );
-        let (debug_pipeline, debug_pipeline_layout, descriptor_set_layout) = debug_pipeline(
+        let (debug_pipeline, debug_pipeline_layout) = debug_pipeline(
             &logical_device,
             render_pass,
             swapchain_extent,
             debug_shaders,
             debug_input_descriptors,
-            descriptor_set_bindings,
+            descriptor_set_layout,
             [0.0],
         );
 
@@ -489,13 +523,13 @@ impl LineLightApp {
         LineLightApp {
             command_buffers,
             _command_pool: command_pool,
-            uniform_buffers,
             graphics_queue,
             logical_device,
             present_queue,
             swapchain,
             swapchain_loader,
             sync,
+            uniform_buffers: ManuallyDrop::new(uniform_buffers),
             depth_image: ManuallyDrop::new(depth_image),
             index_buffer: ManuallyDrop::new(index_buffer),
             vertex_buffer: ManuallyDrop::new(vertex_buffer),
@@ -509,12 +543,14 @@ impl LineLightApp {
             debug_pipeline,
             debug_pipeline_layout,
             image_views,
-            instance,
             render_pass,
             surface,
             surface_loader,
             swapchain_extent,
             window,
+            debug_loader,
+            debug_messenger,
+            instance,
         }
     }
 
@@ -677,7 +713,7 @@ impl LineLightApp {
             image_format,
         );
         let render_pass = render_pass(&self.logical_device, image_format);
-        let (graphics_pipeline, graphics_pipeline_layout, _descriptor_set_layout) = main_pipeline(
+        let (graphics_pipeline, graphics_pipeline_layout, descriptor_set_layout) = main_pipeline(
             &self.logical_device,
             render_pass,
             swapchain_extent,
@@ -686,13 +722,13 @@ impl LineLightApp {
             descriptor_set_bindings,
             [0.0],
         );
-        let (debug_pipeline, debug_pipeline_layout, descriptor_set_layout) = debug_pipeline(
+        let (debug_pipeline, debug_pipeline_layout) = debug_pipeline(
             &self.logical_device,
             render_pass,
             swapchain_extent,
             debug_shaders,
             vertex_input_descriptors,
-            descriptor_set_bindings,
+            descriptor_set_layout,
             [0.0],
         );
         let depth_image = engine_core::create_image(
@@ -728,9 +764,6 @@ impl LineLightApp {
         self.framebuffers = framebuffers;
     }
     unsafe fn clean_swapchain_and_dependants(&mut self) {
-        for buffer in self.framebuffers.drain(..) {
-            self.logical_device.destroy_framebuffer(buffer, None);
-        }
         self.logical_device
             .destroy_pipeline(self.graphics_pipeline, None);
         self.logical_device
@@ -743,6 +776,9 @@ impl LineLightApp {
             .destroy_descriptor_set_layout(self.descriptor_set_layout, None);
         self.logical_device
             .destroy_render_pass(self.render_pass, None);
+        for buffer in self.framebuffers.drain(..) {
+            self.logical_device.destroy_framebuffer(buffer, None);
+        }
         for view in self.image_views.drain(..) {
             self.logical_device.destroy_image_view(view, None);
         }
@@ -963,9 +999,9 @@ fn debug_pipeline(
     swapchain_extent: vk::Extent2D,
     shaders: &[shaders::Shader],
     vertex_input_descriptors: &vk_engine::VertexInputDescriptors,
-    descriptor_set_bindings: &[vk::DescriptorSetLayoutBinding],
+    descriptor_set_layout: vk::DescriptorSetLayout,
     push_constants: [f32; 1],
-) -> (vk::Pipeline, vk::PipelineLayout, vk::DescriptorSetLayout) {
+) -> (vk::Pipeline, vk::PipelineLayout) {
     // Vertex input settings
     let binding_descriptions = &vertex_input_descriptors.bindings;
     let attribute_descriptions = &vertex_input_descriptors.attributes;
@@ -1016,15 +1052,6 @@ fn debug_pipeline(
     let pipeline_color_blend_state_info = vk::PipelineColorBlendStateCreateInfo::builder()
         .logic_op_enable(false)
         .attachments(&pipeline_color_blend_attachment_states);
-
-    // Descriptor set layout
-    let descriptor_set_layout = {
-        let descriptor_set_layout_info =
-            vk::DescriptorSetLayoutCreateInfo::builder().bindings(descriptor_set_bindings);
-
-        unsafe { logical_device.create_descriptor_set_layout(&descriptor_set_layout_info, None) }
-            .unwrap()
-    };
 
     // Pipeline layout
     let push_constant_ranges = [*vk::PushConstantRange::builder()
@@ -1087,7 +1114,7 @@ fn debug_pipeline(
         }
     }
 
-    (debug_pipeline, pipeline_layout, descriptor_set_layout)
+    (debug_pipeline, pipeline_layout)
 }
 
 const DEFAULT_ENTRY: *const c_char = cstr!("main").as_ptr();
