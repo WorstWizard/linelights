@@ -121,7 +121,7 @@ float sample_line_light_stochastic(vec3 pos, vec3 n, vec3 l0, vec3 l1, float I) 
 void main() {
     rng_state = hash(uvec2(uint(gl_FragCoord.x),uint(gl_FragCoord.y)));
 
-    float I = 3.0;
+    float I = 5.0;
     vec3 ambient = vec3(0.1);
 
     vec3 pos = to_world(inPos);
@@ -132,6 +132,6 @@ void main() {
 
     float irr = sample_line_light_stochastic(pos, n, l0, l1, I);
 
-    vec3 color = irr * vec3(1.0,1.0,1.0) + ambient;
+    vec3 color = 1.0 - exp(-irr * vec3(1.0) - ambient);
     outColor = vec4(color,1.0);
 }

@@ -246,7 +246,7 @@ vec3 heatmap(float t) {
 }
 
 void main() {
-    float I = 3.0;
+    float I = 5.0;
     vec3 ambient = vec3(0.1);
 
     vec3 pos = to_world(inPos);
@@ -291,8 +291,7 @@ void main() {
         irr += sample_line_light_analytic(pos, n, p0, p1, fraction_of_light);
     }
     // vec3 color = heatmap(int_arr.size / 4.0 - 1.0);
-    vec3 color = irr * vec3(1.0) + ambient;
-
+    vec3 color = 1.0 - exp(-irr * vec3(1.0) - ambient);
 
     // Fix color banding by adding noise: https://pixelmager.github.io/linelight/banding.html
     color += noise() / 255.0;
