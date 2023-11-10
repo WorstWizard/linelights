@@ -26,12 +26,12 @@ fn main() {
     let _client = tracy_client::Client::start();
     let _span = span!("init");
 
-    let shaders = linelight_vk::make_shaders("simple_shader.vert", "analytic.frag");
+    let shaders = linelight_vk::make_shaders("simple_shader.vert", "plain.frag");
     let debug_shaders = linelight_vk::make_shaders("debugger.vert", "debugger.frag");
     let ubo_bindings = linelight_vk::make_ubo_bindings();
     println!("Loading model...");
-    // let scene = Scene::test_scene_one();
-    let scene = Scene::test_scene_two();
+    let scene = Scene::test_scene_one();
+    // let scene = Scene::test_scene_two();
 
     let (mut app, event_loop, vid) =
         linelight_vk::make_custom_app(&shaders, &debug_shaders, &ubo_bindings, &scene);
@@ -129,6 +129,9 @@ fn main() {
 
                 // Do camera movement
                 let delta_time = timer.elapsed().as_secs_f32();
+                timer = std::time::Instant::now();
+
+                // println!("delta time {delta_time}");
                 if inputs.move_forward {
                     camera.eye += camera.direction() * delta_time * SPEED * delta_time
                 }
@@ -171,8 +174,8 @@ fn main() {
                     mvp: mvp.clone(),
                 };
 
+                let mut t_stamp = (0,0);
                 let mut _span;
-
                 unsafe {
                     write_struct_to_buffer(
                         app.uniform_buffers[current_frame]
@@ -183,7 +186,8 @@ fn main() {
 
                     // Record first timestamp immediately before GPU work
                     app.reset_timestamps(app.command_buffers[current_frame]);
-                    app.record_immediate_timestamp(app.command_buffers[current_frame], 0);
+                    t_stamp.0 = app.get_timestamp_NOW();
+                    // app.record_immediate_timestamp(app.command_buffers[current_frame], true);
                     _span = _gpu_ctx
                         .span_alloc("Drawing", "event_loop", "main.rs", 184)
                         .unwrap();
@@ -210,14 +214,19 @@ fn main() {
                         })
                     }
                 }
+
+                // Submit commands, begin work
                 app.submit_drawing_command_buffer(current_frame);
 
                 // Record second timestamp immediately after GPU work
-                app.record_immediate_timestamp(app.command_buffers[current_frame], 1);
+                // app.wait_for_in_flight_fence(current_frame);
+                // unsafe { app.logical_device.queue_wait_idle(app.graphics_queue) }.unwrap();
+                // app.record_immediate_timestamp(app.command_buffers[current_frame], false);
+                t_stamp.1 = app.get_timestamp_NOW();
                 _span.end_zone();
+                // unsafe { app.logical_device.queue_wait_idle(app.graphics_queue) }.unwrap();
 
-                let timestamps = app.get_timestamps();
-                _span.upload_timestamp(timestamps[0], timestamps[1]);
+                _span.upload_timestamp(t_stamp.0, t_stamp.1);
 
                 match app.present_image(img_index, app.sync.render_finished[current_frame]) {
                     Ok(true) | Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
@@ -227,7 +236,6 @@ fn main() {
                     _ => panic!("Could not present image!"),
                 }
 
-                timer = std::time::Instant::now();
                 current_frame = (current_frame + 1) % vk_engine::engine_core::MAX_FRAMES_IN_FLIGHT;
                 frame_mark();
             }
