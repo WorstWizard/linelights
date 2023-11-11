@@ -1,5 +1,8 @@
+#![allow(dead_code)]
+
 use crate::datatypes::*;
 use glam::{vec3, Mat4, Vec3};
+
 pub struct Scene {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,
