@@ -18,7 +18,7 @@ use datatypes::*;
 use input_handling::*;
 
 // Some config options
-const SPEED: f32 = 100.0;
+const SPEED: f32 = 5.0;
 const ENABLE_DEBUG: bool = false;
 
 fn main() {
@@ -76,6 +76,7 @@ fn main() {
 
     drop(_span);
 
+    app.reset_timestamps(app.command_buffers[0]);
     let period = app.get_timestamp_period();
     let timestamp = app.get_timestamp_immediately();
     let _gpu_ctx = _client
@@ -134,28 +135,26 @@ fn main() {
 
                 // println!("delta time {delta_time}");
                 if inputs.move_forward {
-                    camera.eye += camera.direction() * delta_time * SPEED * delta_time
+                    camera.eye += camera.direction() * delta_time * SPEED
                 }
                 if inputs.move_backward {
-                    camera.eye -= camera.direction() * delta_time * SPEED * delta_time
+                    camera.eye -= camera.direction() * delta_time * SPEED
                 }
                 if inputs.move_right {
                     camera.eye += camera.direction().cross(camera.up()).normalize_or_zero()
                         * delta_time
                         * SPEED
-                        * delta_time
                 }
                 if inputs.move_left {
                     camera.eye -= camera.direction().cross(camera.up()).normalize_or_zero()
                         * delta_time
                         * SPEED
-                        * delta_time
                 }
                 if inputs.move_up {
-                    camera.eye -= camera.up() * delta_time * SPEED * delta_time
+                    camera.eye -= camera.up() * delta_time * SPEED
                 }
                 if inputs.move_down {
-                    camera.eye += camera.up() * delta_time * SPEED * delta_time
+                    camera.eye += camera.up() * delta_time * SPEED
                 }
 
                 let cursor_delta = inputs.cursor_delta();
@@ -175,7 +174,7 @@ fn main() {
                     mvp: mvp.clone(),
                 };
 
-                let mut t_stamp = (0,0);
+                let mut t_stamp = (0, 0);
                 let mut _span;
                 unsafe {
                     write_struct_to_buffer(

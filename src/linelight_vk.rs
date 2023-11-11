@@ -291,6 +291,7 @@ impl LineLightApp {
                 &surface,
                 &physical_device,
                 &swapchain_loader,
+                vk::PresentModeKHR::IMMEDIATE,
                 queue_family_indices,
             );
 
@@ -724,6 +725,7 @@ impl LineLightApp {
                 &self.surface,
                 &physical_device,
                 &self.swapchain_loader,
+                vk::PresentModeKHR::IMMEDIATE,
                 queue_family_indices,
             );
         let image_views = engine_core::create_swapchain_image_views(
@@ -841,7 +843,7 @@ impl LineLightApp {
                         self.query_pool,
                         0,
                     );
-                }
+                },
             );
             self.logical_device
                 .get_query_pool_results(
