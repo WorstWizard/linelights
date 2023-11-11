@@ -60,7 +60,7 @@ fn main() {
     let mut camera = Camera::new();
     // camera.eye = vec3(0.0, -4.0, 5.0);
     camera.eye = vec3(0.0, -6.0, 0.0);
-    camera.rotate(0.0, 3.1415 / 2.0);
+    camera.rotate(0.0, std::f32::consts::FRAC_PI_2);
 
     let model_pos = vec3(0.0, 0.0, 0.0);
     let model_scale = 0.5;
