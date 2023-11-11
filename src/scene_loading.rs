@@ -64,29 +64,47 @@ impl Scene {
     }
 
     pub fn test_scene_two() -> Self {
-        let (doc, buffers, _) = gltf::import("better_test_scene.glb").unwrap();
-        // let gltf_model = gltf::Gltf::open("better_test_scene.glb").expect("Failed to load model");
+        let (vertices, indices, light) = Scene::load_gltf_mesh("better_test_scene.glb");
+        Scene {
+            vertices,
+            indices,
+            light: light.unwrap()
+        }
+    }
+
+    pub fn sponza() -> Self {
+        let (vertices, indices, light) = Scene::load_gltf_mesh("sponza.glb");
+        Scene {
+            vertices,
+            indices,
+            light: light.expect("Not using proper version of Sponza scene: Needs a 'Linelight' object.")
+        }
+    }
+
+    fn load_gltf_mesh(path: &str) -> (Vec<Vertex>, Vec<u32>, Option<LineSegment>) {
+        let (doc, buffers, _) = gltf::import(path).unwrap();
+
         let mut positions = Vec::new();
         let mut normals = Vec::new();
-        let mut light = LineSegment(Vec3::ZERO, Vec3::ZERO);
         let mut indices = Vec::new();
+        let mut light = None;
 
         for node in doc.nodes() {
+            // println!("node: {:?}", node.name());
             let transform_mat = Mat4::from_cols_array_2d(&node.transform().matrix());
-            let mesh = node.mesh().unwrap();
+            let mesh = if let Some(mesh) = node.mesh() { mesh } else { continue };
 
             let first_primitive = mesh.primitives().next().unwrap();
             let reader = first_primitive
                 .reader(|buf| buffers.get(buf.index()).map(|data| data.0.as_slice()));
 
-            if let Some("Line") = mesh.name() {
+            if let Some("Linelight") = mesh.name() {
                 let light_pos: Vec<Vec3> = reader
                     .read_positions()
                     .unwrap()
                     .map(|chunk| transform_mat.transform_point3(unflatten_vec3(&chunk)))
                     .collect();
-                light.0 = light_pos[0];
-                light.1 = light_pos[1];
+                light = Some(LineSegment(light_pos[0], light_pos[1]));
                 continue;
             }
 
@@ -117,11 +135,7 @@ impl Scene {
             .map(|(position, normal)| Vertex { position, normal })
             .collect();
 
-        Scene {
-            vertices,
-            indices,
-            light,
-        }
+        (vertices, indices, light)
     }
 }
 

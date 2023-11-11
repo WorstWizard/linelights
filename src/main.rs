@@ -30,8 +30,9 @@ fn main() {
     let debug_shaders = linelight_vk::make_shaders("debugger.vert", "debugger.frag");
     let ubo_bindings = linelight_vk::make_ubo_bindings();
     println!("Loading model...");
-    let scene = Scene::test_scene_one();
+    // let scene = Scene::test_scene_one();
     // let scene = Scene::test_scene_two();
+    let scene = Scene::sponza();
 
     let (mut app, event_loop, vid) =
         linelight_vk::make_custom_app(&shaders, &debug_shaders, &ubo_bindings, &scene);

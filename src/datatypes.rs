@@ -64,5 +64,5 @@ impl DebugOverlay {
     }
 }
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub struct LineSegment(pub Vec3, pub Vec3);
