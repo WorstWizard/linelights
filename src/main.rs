@@ -76,7 +76,8 @@ fn main() {
 
     drop(_span);
 
-    let (timestamp, period) = app.get_immediate_timestamp();
+    let period = app.get_timestamp_period();
+    let timestamp = app.get_timestamp_immediately();
     let _gpu_ctx = _client
         .new_gpu_context(
             Some("GPU Context"),
@@ -186,7 +187,7 @@ fn main() {
 
                     // Record first timestamp immediately before GPU work
                     app.reset_timestamps(app.command_buffers[current_frame]);
-                    t_stamp.0 = app.get_timestamp_NOW();
+                    t_stamp.0 = app.get_timestamp_immediately();
                     // app.record_immediate_timestamp(app.command_buffers[current_frame], true);
                     _span = _gpu_ctx
                         .span_alloc("Drawing", "event_loop", "main.rs", 184)
@@ -219,13 +220,8 @@ fn main() {
                 app.submit_drawing_command_buffer(current_frame);
 
                 // Record second timestamp immediately after GPU work
-                // app.wait_for_in_flight_fence(current_frame);
-                // unsafe { app.logical_device.queue_wait_idle(app.graphics_queue) }.unwrap();
-                // app.record_immediate_timestamp(app.command_buffers[current_frame], false);
-                t_stamp.1 = app.get_timestamp_NOW();
+                t_stamp.1 = app.get_timestamp_immediately();
                 _span.end_zone();
-                // unsafe { app.logical_device.queue_wait_idle(app.graphics_queue) }.unwrap();
-
                 _span.upload_timestamp(t_stamp.0, t_stamp.1);
 
                 match app.present_image(img_index, app.sync.render_finished[current_frame]) {

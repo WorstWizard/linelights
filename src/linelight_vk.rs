@@ -826,7 +826,7 @@ impl LineLightApp {
                 .unwrap();
         }
     }
-    pub fn get_timestamp_NOW(&self) -> i64 {
+    pub fn get_timestamp_immediately(&self) -> i64 {
         let mut timestamp: [i64; 1] = [0];
         unsafe {
             engine_core::immediate_commands(
@@ -856,92 +856,64 @@ impl LineLightApp {
 
         timestamp[0]
     }
-    pub fn get_immediate_timestamp(&self) -> (i64, f32) {
+    pub fn get_timestamp_period(&self) -> f32 {
         let (physical_device, _) =
             engine_core::find_physical_device(&self.instance, &self.surface_loader, &self.surface);
         let props = unsafe {
             self.instance
                 .get_physical_device_properties(physical_device)
         };
-        let period = props.limits.timestamp_period;
-        let mut timestamp: [i64; 1] = [0];
-        unsafe {
-            engine_core::immediate_commands(
-                &self.logical_device,
-                self.command_pool,
-                self.graphics_queue,
-                |buffer| {
-                    self.logical_device.cmd_reset_query_pool(buffer, self.query_pool, 0, 2);
-                    self.logical_device.cmd_write_timestamp(
-                        buffer,
-                        vk::PipelineStageFlags::TOP_OF_PIPE,
-                        self.query_pool,
-                        0,
-                    );
-                }
-            );
-            self.logical_device
-                .get_query_pool_results(
-                    self.query_pool,
-                    0,
-                    1,
-                    &mut timestamp,
-                    vk::QueryResultFlags::TYPE_64 | vk::QueryResultFlags::WAIT,
-                )
-                .expect("Couldn't get timestamp")
-        }
-
-        (timestamp[0], period)
+        props.limits.timestamp_period
     }
-    pub fn record_immediate_timestamp(&self, command_buffer: vk::CommandBuffer, before_after: bool) {
-        // Reuse the current command buffer instead of reallocating (to get accurate results?)
-        let recording_info = vk::CommandBufferBeginInfo::builder()
-            .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
-        let submit_info = *vk::SubmitInfo::builder().command_buffers(&[command_buffer]);
-        unsafe {
-            self.logical_device
-                .begin_command_buffer(command_buffer, &recording_info)
-                .unwrap();
-            if before_after {
-                self.logical_device.cmd_write_timestamp(
-                    command_buffer,
-                    vk::PipelineStageFlags::TOP_OF_PIPE,
-                    self.query_pool,
-                    0,
-                );
-            } else {
-                self.logical_device.cmd_write_timestamp(
-                    command_buffer,
-                    vk::PipelineStageFlags::BOTTOM_OF_PIPE,
-                    self.query_pool,
-                    1,
-                );
-            }
-            self.logical_device
-                .end_command_buffer(command_buffer)
-                .unwrap();
-            self.logical_device
-                .queue_submit(self.graphics_queue, &[submit_info], vk::Fence::null())
-                .unwrap();
-            self.logical_device
-                .queue_wait_idle(self.graphics_queue)
-                .unwrap();
-        }
-    }
-    pub fn get_timestamps(&self) -> [i64; 2] {
-        let mut timestamps: [i64; 2] = [0, 0];
-        unsafe {
-            self.logical_device.get_query_pool_results(
-                self.query_pool,
-                0,
-                2,
-                &mut timestamps,
-                vk::QueryResultFlags::TYPE_64 | vk::QueryResultFlags::WAIT,
-            )
-        }
-        .expect("Couldn't get timestamp");
-        timestamps
-    }
+    // pub fn record_immediate_timestamp(&self, command_buffer: vk::CommandBuffer, before_after: bool) {
+    //     // Reuse the current command buffer instead of reallocating (to get accurate results?)
+    //     let recording_info = vk::CommandBufferBeginInfo::builder()
+    //         .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
+    //     let submit_info = *vk::SubmitInfo::builder().command_buffers(&[command_buffer]);
+    //     unsafe {
+    //         self.logical_device
+    //             .begin_command_buffer(command_buffer, &recording_info)
+    //             .unwrap();
+    //         if before_after {
+    //             self.logical_device.cmd_write_timestamp(
+    //                 command_buffer,
+    //                 vk::PipelineStageFlags::TOP_OF_PIPE,
+    //                 self.query_pool,
+    //                 0,
+    //             );
+    //         } else {
+    //             self.logical_device.cmd_write_timestamp(
+    //                 command_buffer,
+    //                 vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+    //                 self.query_pool,
+    //                 1,
+    //             );
+    //         }
+    //         self.logical_device
+    //             .end_command_buffer(command_buffer)
+    //             .unwrap();
+    //         self.logical_device
+    //             .queue_submit(self.graphics_queue, &[submit_info], vk::Fence::null())
+    //             .unwrap();
+    //         self.logical_device
+    //             .queue_wait_idle(self.graphics_queue)
+    //             .unwrap();
+    //     }
+    // }
+    // pub fn get_timestamps(&self) -> [i64; 2] {
+    //     let mut timestamps: [i64; 2] = [0, 0];
+    //     unsafe {
+    //         self.logical_device.get_query_pool_results(
+    //             self.query_pool,
+    //             0,
+    //             2,
+    //             &mut timestamps,
+    //             vk::QueryResultFlags::TYPE_64 | vk::QueryResultFlags::WAIT,
+    //         )
+    //     }
+    //     .expect("Couldn't get timestamp");
+    //     timestamps
+    // }
 }
 
 fn render_pass(logical_device: &ash::Device, image_format: vk::Format) -> vk::RenderPass {
