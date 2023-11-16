@@ -56,7 +56,9 @@ pub struct DebugOverlay {
     pub light: LineSegment,
     pub tri_e0: LineSegment,
     pub tri_e1: LineSegment,
+    pub normal: LineSegment,
     pub intersections: [LineSegment; 2 * ARR_MAX],
+    pub occluding_tris: [LineSegment; 3 * 7],
 }
 impl DebugOverlay {
     pub fn num_verts() -> u32 {

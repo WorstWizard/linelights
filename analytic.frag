@@ -107,8 +107,15 @@ vec2 compute_intervals_custom(
     vec3 L = l1 - l0;
     vec3 P = pos - l0;
 
+    // It may occur that the intersection points are further away from the light than
+    // the sampled point, in which case there is no occlusion
+    float dp = sqr_dist_to_line(L, l0, pos);
+    float di0 = sqr_dist_to_line(L, l0, isect0);
+    float di1 = sqr_dist_to_line(L, l0, isect1);
+    if (di0 > dp && di1 > dp) return vec2(2.0, 2.0); // non-occluding interval
+
     int i = 0;
-    int j = 2;
+    int j = 1;
 
     tmp1 = isect0[i]*P[j] - isect0[j]*P[i] + pos[i]*l0[j] - pos[j]*l0[i];
     tmp2 = isect0[i]*L[j] - isect0[j]*L[i] + pos[j]*L[i]  - pos[i]*L[j];
@@ -118,12 +125,7 @@ vec2 compute_intervals_custom(
     tmp2 = isect1[i]*L[j] - isect1[j]*L[i] + pos[j]*L[i]  - pos[i]*L[j];
     t1 = tmp1/tmp2;
 
-    // If an intersection is further away from the line than the sampled point, the t-value will cross infinity
-    // If both are further away, we will already have ruled out an intersection before calling this function, so this is not a concern
-    float dp = sqr_dist_to_line(L, l0, pos);
-    float di0 = sqr_dist_to_line(L, l0, isect0);
-    float di1 = sqr_dist_to_line(L, l0, isect1);
-    
+    // If one intersection is further away from the line than the sampled point, its corresponding t-value will cross infinity
     const float INF = 1e10;
     if (di0 > dp) t0 = -sign(t0) * INF;
     if (di1 > dp) t1 = -sign(t1) * INF;
@@ -186,7 +188,7 @@ bool tri_tri_intersect_custom(
 }
 
 // Records info on which parts of a linelight is visible as an array of intervals (t-values in [0,1])
-const int ARR_MAX = 8;
+const int ARR_MAX = 32;
 struct IntervalArray {
     int size;
     vec2[ARR_MAX] data;

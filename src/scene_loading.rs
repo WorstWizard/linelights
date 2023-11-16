@@ -72,8 +72,16 @@ impl Scene {
         }
     }
 
-    pub fn sponza() -> Self {
-        let (vertices, indices, light) = Scene::load_gltf_mesh("sponza.glb");
+    pub fn sponza(level: u32) -> Self {
+        let (vertices, indices, light) = Scene::load_gltf_mesh(format!("sponza_stripped_{level}.glb").as_str());
+        Scene {
+            vertices,
+            indices,
+            light: light.expect("Not using proper version of Sponza scene: Needs a 'Linelight' object.")
+        }
+    }
+    pub fn dragon(level: u32) -> Self {
+        let (vertices, indices, light) = Scene::load_gltf_mesh(format!("dragon_{level}.glb").as_str());
         Scene {
             vertices,
             indices,

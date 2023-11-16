@@ -18,21 +18,22 @@ use datatypes::*;
 use input_handling::*;
 
 // Some config options
-const SPEED: f32 = 5.0;
-const ENABLE_DEBUG: bool = false;
+const SPEED: f32 = 1.0;
+const ENABLE_DEBUG: bool = true;
 
 fn main() {
     // Connect to tracy for performance statistics
     let _client = tracy_client::Client::start();
     let _span = span!("init");
 
-    let shaders = linelight_vk::make_shaders("simple_shader.vert", "plain.frag");
+    let shaders = linelight_vk::make_shaders("simple_shader.vert", "analytic.frag");
     let debug_shaders = linelight_vk::make_shaders("debugger.vert", "debugger.frag");
     let ubo_bindings = linelight_vk::make_ubo_bindings();
     println!("Loading model...");
     // let scene = Scene::test_scene_one();
     // let scene = Scene::test_scene_two();
-    let scene = Scene::sponza();
+    // let scene = Scene::sponza(64);
+    let scene = Scene::dragon(88);
 
     let (mut app, event_loop, vid) =
         linelight_vk::make_custom_app(&shaders, &debug_shaders, &ubo_bindings, &scene);
@@ -45,7 +46,9 @@ fn main() {
         light: scene.light,
         tri_e0: scene.light,
         tri_e1: scene.light,
+        normal: scene.light,
         intersections: [scene.light; 2 * ARR_MAX],
+        occluding_tris: [scene.light; 3 * 7]
     };
     unsafe {
         write_struct_to_buffer(
@@ -240,97 +243,6 @@ fn main() {
     });
 }
 
-fn update_debug_overlay(
-    clicked_pos: Vec2,
-    app: &mut linelight_vk::LineLightApp,
-    mvp: &vk_engine::MVP,
-    window_size: Vec2,
-    scene: &Scene,
-    debug_overlay: &mut DebugOverlay,
-) {
-    let normalized_window_coord =
-        2.0 * clicked_pos * vec2(1.0 / window_size.x, 1.0 / window_size.y) - vec2(1.0, 1.0);
-    let inverse_mat = (mvp.projection.mul_mat4(&mvp.view.mul_mat4(&mvp.model))).inverse();
-    let mut point_in_scene_space_0 = inverse_mat.mul_vec4(vec4(
-        normalized_window_coord.x,
-        normalized_window_coord.y,
-        0.0,
-        1.0,
-    ));
-    point_in_scene_space_0 *= Vec4::splat(1.0 / point_in_scene_space_0.w);
-    let mut point_in_scene_space_1 = inverse_mat.mul_vec4(vec4(
-        normalized_window_coord.x,
-        normalized_window_coord.y,
-        0.5,
-        1.0,
-    ));
-    point_in_scene_space_1 *= Vec4::splat(1.0 / point_in_scene_space_1.w);
-    let dir = point_in_scene_space_1
-        .sub(point_in_scene_space_0)
-        .xyz()
-        .normalize();
-
-    if let Some(point) = ray_scene_intersect(point_in_scene_space_0.xyz(), dir, scene) {
-        let point = point - 0.00001 * dir;
-        let l0 = scene.light.0;
-        let l1 = scene.light.1;
-        let l = l1 - l0;
-
-        // Draw lines from point to linelight end-points, blocked by geometry
-        if let Some(isect) = ray_scene_intersect(point, (l0 - point).normalize(), scene) {
-            debug_overlay.tri_e0 = LineSegment(point, isect);
-        } else {
-            debug_overlay.tri_e0 = LineSegment(point, l0);
-        }
-        if let Some(isect) = ray_scene_intersect(point, (l1 - point).normalize(), scene) {
-            debug_overlay.tri_e1 = LineSegment(point, isect);
-        } else {
-            debug_overlay.tri_e1 = LineSegment(point, l1);
-        }
-
-        let mut int_arr = IntervalArray {
-            size: 0,
-            data: [Vec2::ZERO; ARR_MAX],
-        };
-        add_interval(&mut int_arr, vec2(0.0, 1.0));
-
-        for tri in scene.indices.chunks_exact(3) {
-            if int_arr.size == 0 {
-                break;
-            }
-
-            let v0 = scene.vertices[tri[0] as usize].position;
-            let v1 = scene.vertices[tri[1] as usize].position;
-            let v2 = scene.vertices[tri[2] as usize].position;
-
-            if let Some(interval) = tri_tri_intersect(l0, l1, point, v0, v1, v2) {
-                // println!("occluding interval: {}", interval);
-                occlude_intervals(&mut int_arr, interval);
-            }
-        }
-
-        // println!("number of intervals: {}", int_arr.size);
-        println!("intervals: {:?}", int_arr.data);
-
-        debug_overlay.intersections = [scene.light; 2 * ARR_MAX];
-        for (i, interval) in int_arr.data.iter().enumerate() {
-            let i0 = l * interval.x + l0;
-            let i1 = l * interval.y + l0;
-            debug_overlay.intersections[2 * i] = LineSegment(point, i0);
-            debug_overlay.intersections[2 * i + 1] = LineSegment(point, i1);
-        }
-
-        unsafe {
-            write_struct_to_buffer(
-                app.debug_buffer
-                    .memory_ptr
-                    .expect("Uniform buffer not mapped!"),
-                debug_overlay as *const DebugOverlay,
-            );
-        }
-    }
-}
-
 fn drawing_commands(
     app: &mut linelight_vk::LineLightApp,
     buffer_index: usize,
@@ -456,6 +368,111 @@ fn drawing_commands(
     }
 }
 
+fn update_debug_overlay(
+    clicked_pos: Vec2,
+    app: &mut linelight_vk::LineLightApp,
+    mvp: &vk_engine::MVP,
+    window_size: Vec2,
+    scene: &Scene,
+    debug_overlay: &mut DebugOverlay,
+) {
+    let normalized_window_coord =
+        2.0 * clicked_pos * vec2(1.0 / window_size.x, 1.0 / window_size.y) - vec2(1.0, 1.0);
+    let inverse_mat = (mvp.projection.mul_mat4(&mvp.view.mul_mat4(&mvp.model))).inverse();
+    let mut point_in_scene_space_0 = inverse_mat.mul_vec4(vec4(
+        normalized_window_coord.x,
+        normalized_window_coord.y,
+        0.0,
+        1.0,
+    ));
+    point_in_scene_space_0 *= Vec4::splat(1.0 / point_in_scene_space_0.w);
+    let mut point_in_scene_space_1 = inverse_mat.mul_vec4(vec4(
+        normalized_window_coord.x,
+        normalized_window_coord.y,
+        0.5,
+        1.0,
+    ));
+    point_in_scene_space_1 *= Vec4::splat(1.0 / point_in_scene_space_1.w);
+    let dir = point_in_scene_space_1
+        .sub(point_in_scene_space_0)
+        .xyz()
+        .normalize();
+
+    if let Some((point, normal)) = ray_scene_intersect(point_in_scene_space_0.xyz(), dir, scene) {
+        debug_overlay.occluding_tris = [scene.light; 3 * 7];
+        debug_overlay.intersections = [scene.light; 2 * ARR_MAX];
+
+        let point = point + 0.005 * normal.normalize();
+        let l0 = scene.light.0;
+        let l1 = scene.light.1;
+        let l = l1 - l0;
+
+        // Draw normal of clicked point
+        debug_overlay.normal = LineSegment(point, point + normal.normalize());
+
+        // Draw lines from point to linelight end-points, blocked by geometry
+        if let Some((isect, _)) = ray_scene_intersect(point, (l0 - point).normalize(), scene) {
+            debug_overlay.tri_e0 = LineSegment(point, isect);
+        } else {
+            debug_overlay.tri_e0 = LineSegment(point, l0);
+        }
+        if let Some((isect, _)) = ray_scene_intersect(point, (l1 - point).normalize(), scene) {
+            debug_overlay.tri_e1 = LineSegment(point, isect);
+        } else {
+            debug_overlay.tri_e1 = LineSegment(point, l1);
+        }
+
+        let mut int_arr = IntervalArray {
+            size: 0,
+            data: [Vec2::ZERO; ARR_MAX],
+        };
+        add_interval(&mut int_arr, vec2(0.0, 1.0));
+
+
+        let mut occluders = 0;
+        for tri in scene.indices.chunks_exact(3) {
+            if int_arr.size == 0 {
+                break;
+            }
+
+            let v0 = scene.vertices[tri[0] as usize].position;
+            let v1 = scene.vertices[tri[1] as usize].position;
+            let v2 = scene.vertices[tri[2] as usize].position;
+
+            if let Some((interval, line)) = tri_tri_intersect(l0, l1, point, v0, v1, v2) {
+                println!("occluding interval: {}", interval);
+                occlude_intervals(&mut int_arr, interval);
+                if occluders < debug_overlay.occluding_tris.len()/3 {
+                    debug_overlay.occluding_tris[occluders*3] = LineSegment(v0,v1);
+                    debug_overlay.occluding_tris[occluders*3+1] = LineSegment(v1,v2);
+                    debug_overlay.occluding_tris[occluders*3+2] = LineSegment(v2,v0);
+                    debug_overlay.intersections[2*occluders] = line;
+                }
+                occluders += 1;
+            }
+        }
+
+        // println!("number of intervals: {}", int_arr.size);
+        // println!("intervals: {:?}", int_arr.data.get(0..int_arr.size));
+
+        // for (i, interval) in int_arr.data.iter().enumerate() {
+        //     let i0 = l * interval.x + l0;
+        //     let i1 = l * interval.y + l0;
+        //     debug_overlay.intersections[2 * i] = LineSegment(point, i0);
+        //     debug_overlay.intersections[2 * i + 1] = LineSegment(point, i1);
+        // }
+
+        unsafe {
+            write_struct_to_buffer(
+                app.debug_buffer
+                    .memory_ptr
+                    .expect("Uniform buffer not mapped!"),
+                debug_overlay as *const DebugOverlay,
+            );
+        }
+    }
+}
+
 fn ray_triangle_intersect(
     origin: Vec3,
     direction: Vec3,
@@ -463,7 +480,7 @@ fn ray_triangle_intersect(
     v0: Vec3,
     v1: Vec3,
     v2: Vec3,
-) -> Option<f32> {
+) -> Option<(f32, Vec3)> {
     const EPS: f32 = 1e-5;
     let e1 = v1 - v0;
     let e2 = v2 - v0;
@@ -488,12 +505,12 @@ fn ray_triangle_intersect(
 
     let t = f * e2.dot(q);
     if t > EPS && t < t_max {
-        return Some(t);
+        return Some((t, e1.cross(e2)));
     }
     None
 }
-fn ray_scene_intersect(origin: Vec3, direction: Vec3, scene: &Scene) -> Option<Vec3> {
-    let closest_t = scene
+fn ray_scene_intersect(origin: Vec3, direction: Vec3, scene: &Scene) -> Option<(Vec3, Vec3)> {
+    let closest_hit = scene
         .indices
         .chunks_exact(3)
         .filter_map(|tri| {
@@ -503,10 +520,10 @@ fn ray_scene_intersect(origin: Vec3, direction: Vec3, scene: &Scene) -> Option<V
 
             ray_triangle_intersect(origin, direction, f32::MAX, v0, v1, v2)
         })
-        .reduce(f32::min);
+        .reduce(|acc, e| { if e.0 < acc.0 { e } else { acc } });
 
-    if let Some(t) = closest_t {
-        return Some(t * direction + origin);
+    if let Some(hit) = closest_hit {
+        return Some((hit.0 * direction + origin, hit.1));
     }
     None
 }
@@ -536,7 +553,7 @@ fn compute_intervals_custom(
     n: Vec3,  // Normal vector for plane defined by l0,l1,pos
     dd1: f32, // Product of signed distances of v0 and v1 to triangle l0,l1,pos
     dd2: f32, // Product of signed distances of v0 and v2 to triangle l0,l1,pos
-) -> Vec2 {
+) -> (Vec2, LineSegment) {
     // Compute intersection points between triangle v0-v1-v2 and plane defined by dot(p - pos, n) = 0
     let isect0;
     let isect1;
@@ -555,26 +572,29 @@ fn compute_intervals_custom(
         isect1 = line_plane_intersect(n, pos, v2 - v1, v1);
     }
 
+    // println!("{isect0}, {isect1}");
+
     // Project intersections onto line t*(l1-l0) + l0 by computation of t-values
     let l = l1 - l0;
     let p = pos - l0;
 
+    let dp = sqr_dist_to_line(l, l0, pos);
+    let di0 = sqr_dist_to_line(l, l0, isect0);
+    let di1 = sqr_dist_to_line(l, l0, isect1);
+    if di0 > dp && di1 > dp { return (vec2(2.0, 2.0), LineSegment(isect0, isect1)) };
+
     let i = 0;
-    let j = 2;
+    let j = 1;
 
     let mut tmp1 = isect0[i] * p[j] - isect0[j] * p[i] + pos[i] * l0[j] - pos[j] * l0[i];
     let mut tmp2 = isect0[i] * l[j] - isect0[j] * l[i] + pos[j] * l[i] - pos[i] * l[j];
     let mut t0 = tmp1 / tmp2;
 
-    // println!("tmp1 {}, tmp2 {}, t0 {}", tmp1, tmp2, t0);
-
     tmp1 = isect1[i] * p[j] - isect1[j] * p[i] + pos[i] * l0[j] - pos[j] * l0[i];
     tmp2 = isect1[i] * l[j] - isect1[j] * l[i] + pos[j] * l[i] - pos[i] * l[j];
     let mut t1 = tmp1 / tmp2;
 
-    let dp = sqr_dist_to_line(l, l0, pos);
-    let di0 = sqr_dist_to_line(l, l0, isect0);
-    let di1 = sqr_dist_to_line(l, l0, isect1);
+
 
     const INF: f32 = 1e10;
     if di0 > dp {
@@ -585,9 +605,9 @@ fn compute_intervals_custom(
     };
 
     sort(&mut t0, &mut t1);
-    vec2(t0, t1)
+    (vec2(t0, t1), LineSegment(isect0, isect1))
 }
-fn tri_tri_intersect(l0: Vec3, l1: Vec3, pos: Vec3, v0: Vec3, v1: Vec3, v2: Vec3) -> Option<Vec2> {
+fn tri_tri_intersect(l0: Vec3, l1: Vec3, pos: Vec3, v0: Vec3, v1: Vec3, v2: Vec3) -> Option<(Vec2, LineSegment)> {
     // Plane equation for occluding triangle: dot(n, x) + d = 0
     let e0 = v1 - v0;
     let mut e1 = v2 - v0;
@@ -617,17 +637,17 @@ fn tri_tri_intersect(l0: Vec3, l1: Vec3, pos: Vec3, v0: Vec3, v1: Vec3, v2: Vec3
 
     let ddv1 = dv0 * dv1;
     let ddv2 = dv0 * dv2;
-
+    
     if ddv1 > 0.0 && ddv2 > 0.0 {
         return None;
     }
-
-    let interval = compute_intervals_custom(l0, l1, pos, v0, v1, v2, n, ddv1, ddv2);
+    
+    let (interval, line) = compute_intervals_custom(l0, l1, pos, v0, v1, v2, n, ddv1, ddv2);
     if interval[0] > 1.0 || interval[1] < 0.0 {
         return None;
     }
 
-    Some(interval)
+    Some((interval, line))
 }
 
 // Records info on which parts of a linelight is visible as an array of intervals (t-values in [0,1])
