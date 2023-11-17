@@ -3,7 +3,6 @@
 
 layout(location = 0) in vec3 inPos;
 layout(location = 1) in vec3 inNormal;
-
 layout(location = 0) out vec4 outColor;
 
 layout(binding = 0) uniform UBO {
@@ -24,7 +23,6 @@ layout(scalar, binding = 2) readonly buffer vertexBuffer {
 layout(binding = 3) readonly buffer indexBuffer {
     uint indices[];
 };
-
 
 vec3 to_world(vec3 v) {
     return (model*vec4(v,1.0)).xyz;
@@ -65,18 +63,37 @@ void sort(inout float a, inout float b) {
         b = c;
     }
 }
-float sqr_dist_to_line(vec3 l, vec3 p0, vec3 p) {
-    vec3 k = p - p0;
-    vec3 d = cross(k, l);
-    return dot(d,d);
+float projected_sqr_dist_to_line(vec3 l0, vec3 l1, vec3 p) {
+    float x0, x1, x2, z0, z1, z2;
+    x0 = p.x; x1 = l0.x; x2 = l1.x;
+    z0 = p.z; z1 = l0.z; z2 = l1.z;
+    return abs( (x2-x1)*(z1-z0) - (z2-z1)*(x1-x0) );
 }
-
+bool linesegments_intersect(vec2 p1, vec2 p2, vec2 p3, vec2 p4) {
+    float a = p3.x-p4.x;
+    float b = p1.x-p3.x;
+    float c = p3.y-p4.y;
+    float d = p1.y-p3.y;
+    float e = p1.x-p2.x;
+    float f = p1.y-p2.y;
+    float t = (b*c - d*a)/(e*c - f*a);
+    float u = (b*f - d*e)/(e*c - f*a);
+    if (t >= 0.0 && t <= 1.0 && u >= 0.0 && u <= 1.0) return true;
+    return false;
+}
+// Computes t-value of intersection along line-segment p1-->p2
+float line_line_intersect_2d(vec2 p1, vec2 p2, vec2 p3, vec2 p4) {
+    float dx = p3.x-p4.x;
+    float dy = p3.y-p4.y;
+    float top = (p1.x-p3.x)*dy - (p1.y-p3.y)*dx;
+    float bot = (p1.x-p2.x)*dy - (p1.y-p2.y)*dx;
+    return top/bot;
+}
 // Plane given by normal n and point p0, line by direction l and point l0
 void line_plane_intersect(vec3 n, vec3 p0, vec3 l, vec3 l0, out vec3 isect) {
     float d = dot(p0 - l0, n) / dot(l, n);
     isect = l0 + d*l;
 }
-
 vec2 compute_intervals_custom(
     vec3 l0,
     vec3 l1,
@@ -104,31 +121,42 @@ vec2 compute_intervals_custom(
 
     // Project intersections onto line t*(l1-l0) + l0 by computation of t-values
     float t0, t1, tmp1, tmp2;
-    vec3 L = l1 - l0;
-    vec3 P = pos - l0;
 
     // It may occur that the intersection points are further away from the light than
     // the sampled point, in which case there is no occlusion
-    float dp = sqr_dist_to_line(L, l0, pos);
-    float di0 = sqr_dist_to_line(L, l0, isect0);
-    float di1 = sqr_dist_to_line(L, l0, isect1);
+    float dp = projected_sqr_dist_to_line(l0, l1, pos);
+    float di0 = projected_sqr_dist_to_line(l0, l1, isect0);
+    float di1 = projected_sqr_dist_to_line(l0, l1, isect1);
     if (di0 > dp && di1 > dp) return vec2(2.0, 2.0); // non-occluding interval
 
-    int i = 0;
-    int j = 1;
-
-    tmp1 = isect0[i]*P[j] - isect0[j]*P[i] + pos[i]*l0[j] - pos[j]*l0[i];
-    tmp2 = isect0[i]*L[j] - isect0[j]*L[i] + pos[j]*L[i]  - pos[i]*L[j];
-    t0 = tmp1/tmp2;
-
-    tmp1 = isect1[i]*P[j] - isect1[j]*P[i] + pos[i]*l0[j] - pos[j]*l0[i];
-    tmp2 = isect1[i]*L[j] - isect1[j]*L[i] + pos[j]*L[i]  - pos[i]*L[j];
-    t1 = tmp1/tmp2;
-
-    // If one intersection is further away from the line than the sampled point, its corresponding t-value will cross infinity
+    // If one intersection is further away from the line than the sampled point,
+    // its corresponding t-value should be at infinity
     const float INF = 1e10;
-    if (di0 > dp) t0 = -sign(t0) * INF;
-    if (di1 > dp) t1 = -sign(t1) * INF;
+    t0 = line_line_intersect_2d(l0.xz,l1.xz,isect0.xz,pos.xz);
+    t1 = line_line_intersect_2d(l0.xz,l1.xz,isect1.xz,pos.xz);
+
+    if (di0 < dp && di1 < dp) { // Best and most common case, t-values are already good
+        sort(t0, t1);
+        return vec2(t0, t1);
+    }
+
+    // Let t0 correspond to the point closer than pos, t1 the more distant
+    if (di1 >= dp) {
+        t1 = t0;
+    }
+    bool intersects_left = linesegments_intersect(l0.xz,pos.xz,isect0.xz,isect1.xz);
+    bool intersects_right = linesegments_intersect(l1.xz,pos.xz,isect0.xz,isect1.xz);
+    if (intersects_left) {
+        if (intersects_right) { // Both
+            t0 = -sign(t1) * INF;
+        } else { // Only left
+            t0 = -INF;
+        }
+    } else if (intersects_right) { // Only right
+        t0 = INF;
+    } else {
+        return vec2(2.0, 2.0);
+    }
 
     sort(t0, t1);
     return vec2(t0, t1);
@@ -143,8 +171,6 @@ bool tri_tri_intersect_custom(
     vec3 v1,
     vec3 v2,
     out vec2 interval
-    // out vec3 out0,
-    // out vec3 out1
 ) {
     // Plane equation for occluding triangle: dot(n, x) + d = 0
     vec3 e0 = v1 - v0;
@@ -180,10 +206,6 @@ bool tri_tri_intersect_custom(
     if (interval[0] > 1.0 || interval[1] < 0.0) {
         return false;
     }
-
-    // out0 = L * max(interval.x, 0.0) + l0;
-    // out1 = L * min(interval.y, 1.0) + l0;
-
     return true;
 }
 

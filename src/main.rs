@@ -1,7 +1,7 @@
 use std::ops::Sub;
 
 use ash::vk;
-use glam::{vec2, vec3, vec4, Mat4, Vec2, Vec3, Vec4, Vec4Swizzles};
+use glam::{vec2, vec3, vec4, Mat4, Vec2, Vec3, Vec4, Vec4Swizzles, Vec3Swizzles};
 use scene_loading::Scene;
 use vk_engine::engine_core::write_struct_to_buffer;
 use winit::event::{Event, WindowEvent};
@@ -33,7 +33,7 @@ fn main() {
     // let scene = Scene::test_scene_one();
     // let scene = Scene::test_scene_two();
     // let scene = Scene::sponza(64);
-    let scene = Scene::dragon(88);
+    let scene = Scene::dragon(32);
 
     let (mut app, event_loop, vid) =
         linelight_vk::make_custom_app(&shaders, &debug_shaders, &ubo_bindings, &scene);
@@ -405,7 +405,6 @@ fn update_debug_overlay(
         let point = point + 0.005 * normal.normalize();
         let l0 = scene.light.0;
         let l1 = scene.light.1;
-        let l = l1 - l0;
 
         // Draw normal of clicked point
         debug_overlay.normal = LineSegment(point, point + normal.normalize());
@@ -440,7 +439,7 @@ fn update_debug_overlay(
             let v2 = scene.vertices[tri[2] as usize].position;
 
             if let Some((interval, line)) = tri_tri_intersect(l0, l1, point, v0, v1, v2) {
-                println!("occluding interval: {}", interval);
+                // println!("occluding interval: {}", interval);
                 occlude_intervals(&mut int_arr, interval);
                 if occluders < debug_overlay.occluding_tris.len()/3 {
                     debug_overlay.occluding_tris[occluders*3] = LineSegment(v0,v1);
@@ -534,10 +533,28 @@ fn sort(a: &mut f32, b: &mut f32) {
     }
 }
 
-fn sqr_dist_to_line(l: Vec3, p0: Vec3, p: Vec3) -> f32 {
-    let k = p - p0;
-    let d = k.cross(l);
-    d.dot(d)
+fn projected_sqr_dist_to_line(l0: Vec3, l1: Vec3, p: Vec3) -> f32 {
+    let x0 = p.x; let x1 = l0.x; let x2 = l1.x;
+    let z0 = p.z; let z1 = l0.z; let z2 = l1.z;
+    ( (x2-x1)*(z1-z0) - (z2-z1)*(x1-x0) ).abs()
+}
+fn line_line_intersect_2d(p1: Vec2, p2: Vec2, p3: Vec2, p4: Vec2) -> f32 {
+    let dx = p3.x-p4.x;
+    let dy = p3.y-p4.y;
+    let top = (p1.x-p3.x)*dy - (p1.y-p3.y)*dx;
+    let bot = (p1.x-p2.x)*dy - (p1.y-p2.y)*dx;
+    top/bot
+}
+fn linesegments_intersect(p1: Vec2, p2: Vec2, p3: Vec2, p4: Vec2) -> bool {
+    let a = p3.x-p4.x;
+    let b = p1.x-p3.x;
+    let c = p3.y-p4.y;
+    let d = p1.y-p3.y;
+    let e = p1.x-p2.x;
+    let f = p1.y-p2.y;
+    let t = (b*c - d*a)/(e*c - f*a);
+    let u = (b*f - d*e)/(e*c - f*a);
+    if t >= 0.0 && t <= 1.0 && u >= 0.0 && u <= 1.0 { true } else { false }
 }
 fn line_plane_intersect(n: Vec3, p0: Vec3, l: Vec3, l0: Vec3) -> Vec3 {
     let d = (p0 - l0).dot(n) / l.dot(n);
@@ -572,37 +589,40 @@ fn compute_intervals_custom(
         isect1 = line_plane_intersect(n, pos, v2 - v1, v1);
     }
 
-    // println!("{isect0}, {isect1}");
-
-    // Project intersections onto line t*(l1-l0) + l0 by computation of t-values
-    let l = l1 - l0;
-    let p = pos - l0;
-
-    let dp = sqr_dist_to_line(l, l0, pos);
-    let di0 = sqr_dist_to_line(l, l0, isect0);
-    let di1 = sqr_dist_to_line(l, l0, isect1);
+    // It may occur that the intersection points are further away from the light than
+    // the sampled point, in which case there is no occlusion
+    let dp = projected_sqr_dist_to_line(l0, l1, pos);
+    let di0 = projected_sqr_dist_to_line(l0, l1, isect0);
+    let di1 = projected_sqr_dist_to_line(l0, l1, isect1);
     if di0 > dp && di1 > dp { return (vec2(2.0, 2.0), LineSegment(isect0, isect1)) };
 
-    let i = 0;
-    let j = 1;
-
-    let mut tmp1 = isect0[i] * p[j] - isect0[j] * p[i] + pos[i] * l0[j] - pos[j] * l0[i];
-    let mut tmp2 = isect0[i] * l[j] - isect0[j] * l[i] + pos[j] * l[i] - pos[i] * l[j];
-    let mut t0 = tmp1 / tmp2;
-
-    tmp1 = isect1[i] * p[j] - isect1[j] * p[i] + pos[i] * l0[j] - pos[j] * l0[i];
-    tmp2 = isect1[i] * l[j] - isect1[j] * l[i] + pos[j] * l[i] - pos[i] * l[j];
-    let mut t1 = tmp1 / tmp2;
-
-
-
+    // If one intersection is further away from the line than the sampled point,
+    // its corresponding t-value should be at infinity
     const INF: f32 = 1e10;
-    if di0 > dp {
-        t0 = -t0.signum() * INF
-    };
-    if di1 > dp {
-        t1 = -t1.signum() * INF
-    };
+    let mut t0 = line_line_intersect_2d(l0.xz(),l1.xz(),isect0.xz(),pos.xz());
+    let mut t1 = line_line_intersect_2d(l0.xz(),l1.xz(),isect1.xz(),pos.xz());
+    if di0 < dp && di1 < dp { // Best and most common case, t-values are already good
+        sort(&mut t0, &mut t1);
+        return (vec2(t0, t1), LineSegment(isect0, isect1));
+    }
+
+    // Let t0 correspond to the point closer than pos, t1 the more distant
+    if di1 >= dp {
+        t1 = t0;
+    }
+    let intersects_left = linesegments_intersect(l0.xz(),pos.xz(),isect0.xz(),isect1.xz());
+    let intersects_right = linesegments_intersect(l1.xz(),pos.xz(),isect0.xz(),isect1.xz());
+    if intersects_left {
+        if intersects_right { // Both
+            t0 = -t1.signum() * INF;
+        } else { // Only left
+            t0 = -INF;
+        }
+    } else if intersects_right { // Only right
+        t0 = INF;
+    } else { // No intersection!
+        return (vec2(2.0, 2.0), LineSegment(isect0, isect1))
+    }
 
     sort(&mut t0, &mut t1);
     (vec2(t0, t1), LineSegment(isect0, isect1))
