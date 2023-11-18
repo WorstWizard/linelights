@@ -19,7 +19,7 @@ use input_handling::*;
 
 // Some config options
 const SPEED: f32 = 1.0;
-const ENABLE_DEBUG: bool = true;
+const ENABLE_DEBUG: bool = false;
 
 fn main() {
     // Connect to tracy for performance statistics
@@ -135,7 +135,7 @@ fn main() {
 
                 // Do camera movement
                 let delta_time = timer.elapsed().as_secs_f32();
-                println!("{}",delta_time*1000.0);
+                // println!("{}",delta_time*1000.0);
                 timer = std::time::Instant::now();
 
                 // println!("delta time {delta_time}");
