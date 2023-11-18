@@ -284,9 +284,6 @@ void main() {
     IntervalArray int_arr;
     int_arr.size = 0;
     add_interval(int_arr, vec2(0.0,1.0));
-
-    vec3 l0_eff = l0;
-    vec3 l1_eff = l1;
     
     // For each triangle, compute whether it could occlude the linelight, if so, update intervals
     for (int i = 0; i < indices.length(); i += 3) {
@@ -299,10 +296,13 @@ void main() {
         vec2 interval;
         if (tri_tri_intersect_custom(l0,l1,pos+0.001*n, v0,v1,v2, interval)) {
             occlude_intervals(int_arr, interval);
-            if (int_arr.size == 1) { // Shrink light to the only visible interval to speed up future intersections
-                l0_eff = max(0.0, interval.x) * L + l0;
-                l0_eff = min(1.0, interval.y) * L + l0;
-            }
+            // This turned out to be slower
+            // if (int_arr.size == 1) { // Shrink light to the only visible interval to speed up future intersections
+            //     vec2 remaining_interval = int_arr.data[0];
+            //     l0_eff = max(0.0, remaining_interval.x) * L + l0;
+            //     l1_eff = min(1.0, remaining_interval.y) * L + l0;
+            //     int_arr.data[0] = vec2(0.0,1.0);
+            // }
         }
     }
 

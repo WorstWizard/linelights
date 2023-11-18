@@ -26,14 +26,14 @@ fn main() {
     let _client = tracy_client::Client::start();
     let _span = span!("init");
 
-    let shaders = linelight_vk::make_shaders("simple_shader.vert", "analytic.frag");
+    let shaders = linelight_vk::make_shaders("simple_shader.vert", "stochastic.frag");
     let debug_shaders = linelight_vk::make_shaders("debugger.vert", "debugger.frag");
     let ubo_bindings = linelight_vk::make_ubo_bindings();
     println!("Loading model...");
     // let scene = Scene::test_scene_one();
     // let scene = Scene::test_scene_two();
     // let scene = Scene::sponza(64);
-    let scene = Scene::dragon(32);
+    let scene = Scene::dragon(8);
 
     let (mut app, event_loop, vid) =
         linelight_vk::make_custom_app(&shaders, &debug_shaders, &ubo_bindings, &scene);
@@ -135,6 +135,7 @@ fn main() {
 
                 // Do camera movement
                 let delta_time = timer.elapsed().as_secs_f32();
+                println!("{}",delta_time*1000.0);
                 timer = std::time::Instant::now();
 
                 // println!("delta time {delta_time}");

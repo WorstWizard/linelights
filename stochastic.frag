@@ -28,6 +28,7 @@ struct Ray {
     vec3 origin;
     vec3 direction;
     float t_max;
+    bool hit;
 };
 
 vec3 to_world(vec3 v) {
@@ -66,16 +67,7 @@ bool ray_triangle_intersect(Ray r, vec3 v0, vec3 v1, vec3 v2) {
     return false;
 }
 
-bool intersect_scene(Ray r) {
-    for (int i = 0; i < indices.length(); i += 3) {
-        vec3 v0 = to_world(verts[indices[i]].pos);
-        vec3 v1 = to_world(verts[indices[i+1]].pos);
-        vec3 v2 = to_world(verts[indices[i+2]].pos);
 
-        if ( ray_triangle_intersect(r, v0, v1, v2) ) return true;
-    }
-    return false;
-}
 
 // 2D hash with good performance, as per https://www.shadertoy.com/view/4tXyWN, recommended/tested in [Jarzynski 2020]
 uint hash(uvec2 x) {
@@ -93,28 +85,50 @@ float rand_pcg() {
     return float(n) * (1.0/float(0xffffffffU));
 }
 
-const int NUM_SAMPLES = 2;
+const int NUM_SAMPLES = 4;
 float sample_line_light_stochastic(vec3 pos, vec3 n, vec3 l0, vec3 l1, float I) {
-    vec3 l_dir = l1 - l0;
+    vec3 l = l1 - l0;
+
+    // Generate rays
+    Ray[NUM_SAMPLES] rays;
+    for (int i=0; i<NUM_SAMPLES; i++) {
+        float t = rand_pcg();
+        vec3 target = l0 + t*l;
+        vec3 origin = pos + 0.001*n;
+        vec3 dir = target - origin;
+        float d = length(dir);
+
+        Ray r;
+        r.origin = origin;
+        r.direction = dir/d;
+        r.t_max = d;
+        r.hit = false;
+
+        rays[i] = r;
+    }
+
+    for (int i = 0; i < indices.length(); i += 3) {
+        vec3 v0 = to_world(verts[indices[i]].pos);
+        vec3 v1 = to_world(verts[indices[i+1]].pos);
+        vec3 v2 = to_world(verts[indices[i+2]].pos);
+
+        for (int i=0; i<NUM_SAMPLES; i++) {
+            Ray r = rays[i];
+            if ( ray_triangle_intersect(r, v0, v1, v2) ) {
+                rays[i].hit = true;
+            }
+        }
+    }
 
     float irr = 0.0;
     for (int i=0; i<NUM_SAMPLES; i++) {
-
-        float t = rand_pcg();
-        vec3 target = l0 + t*l_dir;
-        vec3 l = target - pos;
-        float d = length(l);
-
-        Ray r;
-        r.origin = pos;
-        r.direction = l/d;
-        r.t_max = d;
-
-        if (intersect_scene(r)) continue;
-
-        float clamped_cos = clamp(dot(n,r.direction), 0.0, 1.0);
-        irr += I * clamped_cos / (d*d) / float(NUM_SAMPLES);
+        Ray r = rays[i];
+        if ( !r.hit ) {
+            float clamped_cos = clamp(dot(n,r.direction), 0.0, 1.0);
+            irr += I * clamped_cos / (r.t_max * r.t_max) / float(NUM_SAMPLES);
+        }
     }
+
     return irr;
 }
 
