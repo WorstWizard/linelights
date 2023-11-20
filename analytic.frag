@@ -127,11 +127,8 @@ vec2 compute_intervals_custom(
     float dp = projected_sqr_dist_to_line(l0, l1, pos);
     float di0 = projected_sqr_dist_to_line(l0, l1, isect0);
     float di1 = projected_sqr_dist_to_line(l0, l1, isect1);
-    if (di0 > dp && di1 > dp) return vec2(2.0, 2.0); // non-occluding interval
+    if (di0 > dp && di1 > dp) return vec2(2.0, 2.0); // arbitrary non-occluding interval
 
-    // If one intersection is further away from the line than the sampled point,
-    // its corresponding t-value should be at infinity
-    const float INF = 1e10;
     t0 = line_line_intersect_2d(l0.xz,l1.xz,isect0.xz,pos.xz);
     t1 = line_line_intersect_2d(l0.xz,l1.xz,isect1.xz,pos.xz);
 
@@ -140,6 +137,9 @@ vec2 compute_intervals_custom(
         return vec2(t0, t1);
     }
 
+    // If one intersection is further away from the line than the sampled point,
+    // its corresponding t-value should be at infinity
+    const float INF = 1e10;
     // Let t0 correspond to the point closer than pos, t1 the more distant
     if (di1 >= dp) {
         t1 = t0;
