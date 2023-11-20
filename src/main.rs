@@ -21,9 +21,22 @@ use input_handling::*;
 const SPEED: f32 = 1.0;
 const ENABLE_DEBUG: bool = true;
 
-
+// Schwarz 2010
 fn tri_aabb_intersect(v0: Vec3, v1: Vec3, v2: Vec3, p: Vec3, q: Vec3) -> bool {
-    v0.x > 0.0
+    fn step(x: f32) -> f32 { if x > 0.0 { 1.0 } else { 0.0 } }
+
+    let e1 = v1-v0;
+    let e2 = v2-v0;
+    let n = e1.cross(e2);
+    let d_p = q-p;
+    let c = vec3(
+        d_p.x * step(n.x),
+        d_p.y * step(n.y),
+        d_p.z * step(n.z),
+    );
+    let d1 = n.dot(c - v0);
+    let d2 = n.dot((d_p - c) - v0);
+    if (n.dot(p) + d1)*(n.dot(p) + d2) <= 0.0 { true } else { false }
 }
 
 
