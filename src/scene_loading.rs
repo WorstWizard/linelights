@@ -68,24 +68,28 @@ impl Scene {
         Scene {
             vertices,
             indices,
-            light: light.unwrap()
+            light: light.unwrap(),
         }
     }
 
     pub fn sponza(level: u32) -> Self {
-        let (vertices, indices, light) = Scene::load_gltf_mesh(format!("sponza_stripped_{level}.glb").as_str());
+        let (vertices, indices, light) =
+            Scene::load_gltf_mesh(format!("sponza_stripped_{level}.glb").as_str());
         Scene {
             vertices,
             indices,
-            light: light.expect("Not using proper version of Sponza scene: Needs a 'Linelight' object.")
+            light: light
+                .expect("Not using proper version of Sponza scene: Needs a 'Linelight' object."),
         }
     }
     pub fn dragon(level: u32) -> Self {
-        let (vertices, indices, light) = Scene::load_gltf_mesh(format!("dragon_{level}.glb").as_str());
+        let (vertices, indices, light) =
+            Scene::load_gltf_mesh(format!("dragon_{level}.glb").as_str());
         Scene {
             vertices,
             indices,
-            light: light.expect("Not using proper version of Sponza scene: Needs a 'Linelight' object.")
+            light: light
+                .expect("Not using proper version of Sponza scene: Needs a 'Linelight' object."),
         }
     }
 
@@ -100,7 +104,11 @@ impl Scene {
         for node in doc.nodes() {
             // println!("node: {:?}", node.name());
             let transform_mat = Mat4::from_cols_array_2d(&node.transform().matrix());
-            let mesh = if let Some(mesh) = node.mesh() { mesh } else { continue };
+            let mesh = if let Some(mesh) = node.mesh() {
+                mesh
+            } else {
+                continue;
+            };
 
             let first_primitive = mesh.primitives().next().unwrap();
             let reader = first_primitive
