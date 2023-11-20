@@ -140,7 +140,7 @@ vec2 compute_intervals_custom(
     // If one intersection is further away from the line than the sampled point,
     // its corresponding t-value should be at infinity
     const float INF = 1e10;
-    // Let t0 correspond to the point closer than pos, t1 the more distant point
+    // Let t1 correspond to the point closer than pos, t0 the more distant point
     // Ergo, t0 will be put at +/- infinity, while t1 is kept
     if (di1 >= dp) t1 = t0;
     
