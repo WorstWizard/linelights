@@ -26,7 +26,7 @@ fn main() {
     let _client = tracy_client::Client::start();
     let _span = span!("init");
 
-    let shaders = linelight_vk::make_shaders("simple_shader.vert", "plain.frag");
+    let shaders = linelight_vk::make_shaders("aabb_test.vert", "aabb_test.frag");
     let debug_shaders = linelight_vk::make_shaders("debugger.vert", "debugger.frag");
     let ubo_bindings = linelight_vk::make_ubo_bindings();
     println!("Loading model...");
