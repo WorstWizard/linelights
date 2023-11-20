@@ -142,7 +142,7 @@ vec2 compute_intervals_custom(
     const float INF = 1e10;
     // Let t0 correspond to the point closer than pos, t1 the more distant point
     // Ergo, t0 will be put at +/- infinity, while t1 is kept
-    if (di1 >= dp) t1 = t0
+    if (di1 >= dp) t1 = t0;
     
     bool intersects_left = linesegments_intersect(l0.xz,pos.xz,isect0.xz,isect1.xz);
     bool intersects_right = linesegments_intersect(l1.xz,pos.xz,isect0.xz,isect1.xz);
