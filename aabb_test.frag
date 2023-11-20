@@ -40,7 +40,7 @@ float rand_pcg() {
 
 void main() {
     rng_state = vertIndex;
-    float k = rand_pcg()*0.5;
-    vec3 color = test() ? vec3(1.0,0.2,0.2) : vec3(0.3) * (1.0+k);
+    float k = (rand_pcg() - 0.5) * 0.2;
+    vec3 color = test() ? vec3(1.0,0.2,0.2) + vec3(k) : vec3(0.3) + vec3(k);
     outColor = vec4(color,1.0);
 }
