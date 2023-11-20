@@ -148,18 +148,15 @@ vec2 compute_intervals_custom(
     bool intersects_right = linesegments_intersect(l1.xz,pos.xz,isect0.xz,isect1.xz);
     if (intersects_left) {
         if (intersects_right) { // Both
-            t0 = -sign(t1) * INF;
+            return vec2(-1.0, 2.0);
         } else { // Only left
-            t0 = -INF;
+            return vec2(-INF, t1);
         }
     } else if (intersects_right) { // Only right
-        t0 = INF;
+        return vec2(t1, INF);
     } else {
         return vec2(2.0, 2.0);
     }
-
-    sort(t0, t1);
-    return vec2(t0, t1);
 }
 
 
