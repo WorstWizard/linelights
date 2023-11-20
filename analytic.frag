@@ -132,7 +132,7 @@ vec2 compute_intervals_custom(
     t0 = line_line_intersect_2d(l0.xz,l1.xz,isect0.xz,pos.xz);
     t1 = line_line_intersect_2d(l0.xz,l1.xz,isect1.xz,pos.xz);
 
-    if (di0 < dp && di1 < dp) { // Best and most common case, t-values are already good
+    if (di0 < dp && di1 < dp) { // Most common case, t-values are already good
         sort(t0, t1);
         return vec2(t0, t1);
     }
@@ -140,10 +140,10 @@ vec2 compute_intervals_custom(
     // If one intersection is further away from the line than the sampled point,
     // its corresponding t-value should be at infinity
     const float INF = 1e10;
-    // Let t0 correspond to the point closer than pos, t1 the more distant
-    if (di1 >= dp) {
-        t1 = t0;
-    }
+    // Let t0 correspond to the point closer than pos, t1 the more distant point
+    // Ergo, t0 will be put at +/- infinity, while t1 is kept
+    if (di1 >= dp) t1 = t0
+    
     bool intersects_left = linesegments_intersect(l0.xz,pos.xz,isect0.xz,isect1.xz);
     bool intersects_right = linesegments_intersect(l1.xz,pos.xz,isect0.xz,isect1.xz);
     if (intersects_left) {
