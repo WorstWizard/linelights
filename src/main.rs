@@ -19,21 +19,21 @@ use input_handling::*;
 
 // Some config options
 const SPEED: f32 = 1.0;
-const ENABLE_DEBUG: bool = false;
+const ENABLE_DEBUG: bool = true;
 
 fn main() {
     // Connect to tracy for performance statistics
     let _client = tracy_client::Client::start();
     let _span = span!("init");
 
-    let shaders = linelight_vk::make_shaders("simple_shader.vert", "stochastic.frag");
+    let shaders = linelight_vk::make_shaders("simple_shader.vert", "plain.frag");
     let debug_shaders = linelight_vk::make_shaders("debugger.vert", "debugger.frag");
     let ubo_bindings = linelight_vk::make_ubo_bindings();
     println!("Loading model...");
     // let scene = Scene::test_scene_one();
     // let scene = Scene::test_scene_two();
     // let scene = Scene::sponza(64);
-    let scene = Scene::dragon(8);
+    let scene = Scene::dragon(64);
 
     let (mut app, event_loop, vid) =
         linelight_vk::make_custom_app(&shaders, &debug_shaders, &ubo_bindings, &scene);
@@ -42,14 +42,9 @@ fn main() {
     let mut timer = std::time::Instant::now();
 
     // Stuff for debugging overlay
-    let mut debug_overlay = DebugOverlay {
-        light: scene.light,
-        tri_e0: scene.light,
-        tri_e1: scene.light,
-        normal: scene.light,
-        intersections: [scene.light; 2 * ARR_MAX],
-        occluding_tris: [scene.light; 3 * 7]
-    };
+    let aabb_center = vec3(0.0,3.0, 0.0);
+    let aabb = (-Vec3::ONE + aabb_center, Vec3::ONE + aabb_center);
+    let mut debug_overlay = DebugOverlay::aabb(aabb.0, aabb.1);
     unsafe {
         write_struct_to_buffer(
             app.debug_buffer
@@ -400,27 +395,27 @@ fn update_debug_overlay(
         .normalize();
 
     if let Some((point, normal)) = ray_scene_intersect(point_in_scene_space_0.xyz(), dir, scene) {
-        debug_overlay.occluding_tris = [scene.light; 3 * 7];
-        debug_overlay.intersections = [scene.light; 2 * ARR_MAX];
+        // debug_overlay.occluding_tris = [scene.light; 3 * 7];
+        // debug_overlay.intersections = [scene.light; 2 * ARR_MAX];
 
         let point = point + 0.005 * normal.normalize();
         let l0 = scene.light.0;
         let l1 = scene.light.1;
 
         // Draw normal of clicked point
-        debug_overlay.normal = LineSegment(point, point + normal.normalize());
+        // debug_overlay.normal = LineSegment(point, point + normal.normalize());
 
         // Draw lines from point to linelight end-points, blocked by geometry
-        if let Some((isect, _)) = ray_scene_intersect(point, (l0 - point).normalize(), scene) {
-            debug_overlay.tri_e0 = LineSegment(point, isect);
-        } else {
-            debug_overlay.tri_e0 = LineSegment(point, l0);
-        }
-        if let Some((isect, _)) = ray_scene_intersect(point, (l1 - point).normalize(), scene) {
-            debug_overlay.tri_e1 = LineSegment(point, isect);
-        } else {
-            debug_overlay.tri_e1 = LineSegment(point, l1);
-        }
+        // if let Some((isect, _)) = ray_scene_intersect(point, (l0 - point).normalize(), scene) {
+        //     debug_overlay.tri_e0 = LineSegment(point, isect);
+        // } else {
+        //     debug_overlay.tri_e0 = LineSegment(point, l0);
+        // }
+        // if let Some((isect, _)) = ray_scene_intersect(point, (l1 - point).normalize(), scene) {
+        //     debug_overlay.tri_e1 = LineSegment(point, isect);
+        // } else {
+        //     debug_overlay.tri_e1 = LineSegment(point, l1);
+        // }
 
         let mut int_arr = IntervalArray {
             size: 0,
@@ -429,7 +424,7 @@ fn update_debug_overlay(
         add_interval(&mut int_arr, vec2(0.0, 1.0));
 
 
-        let mut occluders = 0;
+        // let mut occluders = 0;
         for tri in scene.indices.chunks_exact(3) {
             if int_arr.size == 0 {
                 break;
@@ -439,16 +434,16 @@ fn update_debug_overlay(
             let v1 = scene.vertices[tri[1] as usize].position;
             let v2 = scene.vertices[tri[2] as usize].position;
 
-            if let Some((interval, line)) = tri_tri_intersect(l0, l1, point, v0, v1, v2) {
+            if let Some((interval, _)) = tri_tri_intersect(l0, l1, point, v0, v1, v2) {
                 // println!("occluding interval: {}", interval);
                 occlude_intervals(&mut int_arr, interval);
-                if occluders < debug_overlay.occluding_tris.len()/3 {
-                    debug_overlay.occluding_tris[occluders*3] = LineSegment(v0,v1);
-                    debug_overlay.occluding_tris[occluders*3+1] = LineSegment(v1,v2);
-                    debug_overlay.occluding_tris[occluders*3+2] = LineSegment(v2,v0);
-                    debug_overlay.intersections[2*occluders] = line;
-                }
-                occluders += 1;
+                // if occluders < debug_overlay.occluding_tris.len()/3 {
+                //     debug_overlay.occluding_tris[occluders*3] = LineSegment(v0,v1);
+                //     debug_overlay.occluding_tris[occluders*3+1] = LineSegment(v1,v2);
+                //     debug_overlay.occluding_tris[occluders*3+2] = LineSegment(v2,v0);
+                //     debug_overlay.intersections[2*occluders] = line;
+                // }
+                // occluders += 1;
             }
         }
 

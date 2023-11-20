@@ -2,7 +2,7 @@ use std::f32::consts::PI;
 
 use glam::{Quat, Vec3};
 
-use crate::ARR_MAX;
+// use crate::ARR_MAX;
 
 #[repr(C)]
 pub struct LineLightUniform {
@@ -53,16 +53,31 @@ impl Camera {
 
 #[repr(C)]
 pub struct DebugOverlay {
-    pub light: LineSegment,
-    pub tri_e0: LineSegment,
-    pub tri_e1: LineSegment,
-    pub normal: LineSegment,
-    pub intersections: [LineSegment; 2 * ARR_MAX],
-    pub occluding_tris: [LineSegment; 3 * 7],
+    box_lines: [LineSegment; 12]
 }
 impl DebugOverlay {
     pub fn num_verts() -> u32 {
         (std::mem::size_of::<DebugOverlay>() / std::mem::size_of::<Vec3>()) as u32
+    }
+    pub fn aabb(a: Vec3, b: Vec3) -> Self {
+        let d = b-a;
+        let mut dx = d; dx.y = 0.0; dx.z = 0.0;
+        let mut dy = d; dy.x = 0.0; dy.z = 0.0;
+        let mut dz = d; dz.x = 0.0; dz.y = 0.0;
+        Self { box_lines: [
+            LineSegment(a, a+dx),
+            LineSegment(a, a+dy),
+            LineSegment(a, a+dz),
+            LineSegment(a+dx, a+dx+dy),
+            LineSegment(a+dx, a+dx+dz),
+            LineSegment(a+dy, a+dy+dx),
+            LineSegment(a+dy, a+dy+dz),
+            LineSegment(a+dz, a+dz+dx),
+            LineSegment(a+dz, a+dz+dy),
+            LineSegment(b, b-dx),
+            LineSegment(b, b-dy),
+            LineSegment(b, b-dz),
+        ] }
     }
 }
 #[repr(C)]
