@@ -21,6 +21,12 @@ use input_handling::*;
 const SPEED: f32 = 1.0;
 const ENABLE_DEBUG: bool = true;
 
+
+fn tri_aabb_intersect(v0: Vec3, v1: Vec3, v2: Vec3, p: Vec3, q: Vec3) -> bool {
+    v0.x > 0.0
+}
+
+
 fn main() {
     // Connect to tracy for performance statistics
     let _client = tracy_client::Client::start();
@@ -33,7 +39,23 @@ fn main() {
     // let scene = Scene::test_scene_one();
     // let scene = Scene::test_scene_two();
     // let scene = Scene::sponza(64);
-    let scene = Scene::dragon(64);
+
+    // Stuff for debugging overlay
+    let aabb_center = vec3(0.0,3.0, 0.0);
+    let aabb = (-Vec3::ONE + aabb_center, Vec3::ONE + aabb_center);
+    let mut debug_overlay = DebugOverlay::aabb(aabb.0, aabb.1);
+
+    let mut scene = Scene::dragon(64);
+    let filtered_indices: Vec<u32> = scene
+        .indices
+        .chunks_exact(3)
+        .filter(|tri| {
+            let v0 = scene.vertices[tri[0] as usize].position;
+            let v1 = scene.vertices[tri[1] as usize].position;
+            let v2 = scene.vertices[tri[2] as usize].position;
+            tri_aabb_intersect(v0,v1,v2,aabb.0, aabb.1)
+        }).flatten().map(|i| *i).collect();
+    scene.indices = filtered_indices;
 
     let (mut app, event_loop, vid) =
         linelight_vk::make_custom_app(&shaders, &debug_shaders, &ubo_bindings, &scene);
@@ -41,10 +63,6 @@ fn main() {
     let mut current_frame = 0;
     let mut timer = std::time::Instant::now();
 
-    // Stuff for debugging overlay
-    let aabb_center = vec3(0.0,3.0, 0.0);
-    let aabb = (-Vec3::ONE + aabb_center, Vec3::ONE + aabb_center);
-    let mut debug_overlay = DebugOverlay::aabb(aabb.0, aabb.1);
     unsafe {
         write_struct_to_buffer(
             app.debug_buffer
