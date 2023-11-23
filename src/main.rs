@@ -18,8 +18,6 @@ mod scene_loading;
 use datatypes::*;
 use input_handling::*;
 
-use crate::acceleration::{tri_aabb_intersect, tri_aabb_precompute, precomputed_tri_aabb_intersect};
-
 // Some config options
 const SPEED: f32 = 1.0;
 const ENABLE_DEBUG: bool = true;

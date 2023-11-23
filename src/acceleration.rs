@@ -151,12 +151,13 @@ pub struct AccelStruct {
     pub sizes: [u32; BBOX_COUNT], // Number of indices per bbox
 }
 pub fn build_acceleration_structure(scene: &Scene) -> (AccelStruct, Vec<u32>) {
-    let bbox_size = vec3(4.0, 4.0, 4.0);
+    let bbox_size = vec3(10.0, 7.5, 10.0);
+    let corner_origin = vec3(-10.0, -0.2, -10.0);
     let origins = vec![
-        vec3(0.0, 0.0, 0.0),
-        vec3(4.0, 0.0, 0.0),
-        vec3(0.0, 4.0, 0.0),
-        vec3(4.0, 4.0, 0.0),
+        corner_origin,
+        corner_origin + Vec3::X * bbox_size.x,
+        corner_origin + Vec3::Z * bbox_size.z,
+        corner_origin + Vec3::X * bbox_size.x + Vec3::Z * bbox_size.z,
     ];
     let bbox_origins: [Vec3; BBOX_COUNT] = origins
         .try_into()

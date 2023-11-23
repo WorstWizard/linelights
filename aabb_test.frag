@@ -137,8 +137,8 @@ void main() {
         vec3(0.0,0.0,1.0),
     };
 
-    vec3 l0 = vec3(-0.1,4.0,-200.0);
-    vec3 l1 = vec3(0.1,4.0,-200.0);
+    vec3 l0 = vec3(-0.1,20.0,0.0);
+    vec3 l1 = vec3(0.1,20.0,0.0);
     vec3 pos = inPos;
 
     PrecomputeVals precompute = tri_aabb_precompute(l0, l1, pos, accel_struct.bbox_size);
