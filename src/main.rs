@@ -48,24 +48,24 @@ fn main() {
         accel_struct.bbox_origins[0],
         accel_struct.bbox_origins[0] + accel_struct.bbox_size,
     );
-    let filtered_indices = scene
-        .indices
-        .chunks_exact(3)
-        .filter(|&tri| {
-            let v0 = scene.vertices[tri[0] as usize].position;
-            let v1 = scene.vertices[tri[1] as usize].position;
-            let v2 = scene.vertices[tri[2] as usize].position;
-            let precompute = tri_aabb_precompute(v0, v1, v2, accel_struct.bbox_size);
-            accel_struct.bbox_origins.map(|p| precomputed_tri_aabb_intersect(&precompute, p)).into_iter().any(|b| b)
-        })
-        .flatten()
-        .map(|i| *i)
-        .collect();
+    // let filtered_indices = scene
+    //     .indices
+    //     .chunks_exact(3)
+    //     .filter(|&tri| {
+    //         let v0 = scene.vertices[tri[0] as usize].position;
+    //         let v1 = scene.vertices[tri[1] as usize].position;
+    //         let v2 = scene.vertices[tri[2] as usize].position;
+    //         let precompute = tri_aabb_precompute(v0, v1, v2, accel_struct.bbox_size);
+    //         accel_struct.bbox_origins.map(|p| precomputed_tri_aabb_intersect(&precompute, p)).into_iter().any(|b| b)
+    //     })
+    //     .flatten()
+    //     .map(|i| *i)
+    //     .collect();
 
-    scene.indices = filtered_indices;
+    // scene.indices = filtered_indices;
 
-    let (mut app, event_loop, vid) =
-        linelight_vk::make_custom_app(&shaders, &debug_shaders, &ubo_bindings, &scene);
+    let (mut app, event_loop, vid, did) =
+        linelight_vk::make_custom_app(&shaders, &debug_shaders, &ubo_bindings, &scene, &accel_indices);
 
     let mut current_frame = 0;
     let mut timer = std::time::Instant::now();
@@ -127,7 +127,7 @@ fn main() {
 
                 let img_index = match app.acquire_next_image(current_frame) {
                     Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
-                        app.recreate_swapchain(&shaders, &debug_shaders, &vid, &ubo_bindings);
+                        app.recreate_swapchain(&shaders, &debug_shaders, &vid, &did, &ubo_bindings);
                         return;
                     }
                     Ok((i, _)) => i, // Swapchain may be suboptimal, but it's easier to just proceed
@@ -250,7 +250,7 @@ fn main() {
 
                 match app.present_image(img_index, app.sync.render_finished[current_frame]) {
                     Ok(true) | Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
-                        app.recreate_swapchain(&shaders, &debug_shaders, &vid, &ubo_bindings)
+                        app.recreate_swapchain(&shaders, &debug_shaders, &vid, &did, &ubo_bindings)
                     }
                     Ok(false) => (),
                     _ => panic!("Could not present image!"),

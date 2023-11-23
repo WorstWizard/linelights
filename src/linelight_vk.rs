@@ -77,9 +77,11 @@ pub fn make_custom_app(
     debug_shaders: &[vk_engine::shaders::Shader],
     ubo_bindings: &[vk::DescriptorSetLayoutBinding],
     scene: &Scene,
+    acceleration_indices: &Vec<u32>
 ) -> (
     LineLightApp,
     winit::event_loop::EventLoop<()>,
+    vk_engine::VertexInputDescriptors,
     vk_engine::VertexInputDescriptors,
 ) {
     let _span = span!("make_app");
@@ -110,10 +112,11 @@ pub fn make_custom_app(
         ubo_bindings.clone(),
         &scene.vertices,
         &scene.indices,
+        acceleration_indices
     );
 
-    app.update_descriptor_sets(scene.vertices.len() as u64, scene.indices.len() as u64);
-    (app, event_loop, vid)
+    app.update_descriptor_sets(scene.vertices.len() as u64, acceleration_indices.len() as u64);
+    (app, event_loop, vid, did)
 }
 
 pub struct LineLightApp {
@@ -132,6 +135,7 @@ pub struct LineLightApp {
     pub vertex_buffer: ManuallyDrop<engine_core::ManagedBuffer>,
     pub index_buffer: ManuallyDrop<engine_core::ManagedBuffer>,
     pub uniform_buffers: ManuallyDrop<Vec<vk_engine::engine_core::ManagedBuffer>>,
+    pub acceleration_index_buffer: ManuallyDrop<engine_core::ManagedBuffer>,
     depth_image: ManuallyDrop<engine_core::ManagedImage>,
     pub descriptor_sets: Vec<vk::DescriptorSet>,
     descriptor_set_layout: vk::DescriptorSetLayout,
@@ -174,6 +178,7 @@ impl Drop for LineLightApp {
             ManuallyDrop::drop(&mut self.vertex_buffer);
             ManuallyDrop::drop(&mut self.index_buffer);
             ManuallyDrop::drop(&mut self.uniform_buffers);
+            ManuallyDrop::drop(&mut self.acceleration_index_buffer);
             ManuallyDrop::drop(&mut self.depth_image);
 
             self.clean_swapchain_and_dependants();
@@ -204,6 +209,7 @@ impl LineLightApp {
         descriptor_set_bindings: &[vk::DescriptorSetLayoutBinding],
         vertices: &Vec<Vertex>,
         indices: &Vec<u32>,
+        acceleration_indices: &Vec<u32>
     ) -> Self {
         let _span = span!("LineLightApp::new()");
 
@@ -384,8 +390,29 @@ impl LineLightApp {
                 &logical_device,
                 (std::mem::size_of::<IndexType>() * indices.len()) as u64,
                 vk::BufferUsageFlags::INDEX_BUFFER
-                    | vk::BufferUsageFlags::TRANSFER_DST
-                    | vk::BufferUsageFlags::STORAGE_BUFFER,
+                    | vk::BufferUsageFlags::TRANSFER_DST,
+            );
+            let buffer_mem = engine_core::buffer::allocate_and_bind_buffer(
+                &instance,
+                &physical_device,
+                &logical_device,
+                buffer,
+                vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            );
+            engine_core::ManagedBuffer {
+                logical_device: Rc::clone(&logical_device),
+                buffer,
+                buffer_memory: Some(buffer_mem),
+                memory_ptr: None,
+            }
+        };
+
+        let acceleration_index_buffer = {
+            let buffer = engine_core::buffer::create_buffer(
+                &logical_device,
+                (std::mem::size_of::<IndexType>() * acceleration_indices.len()) as u64,
+                vk::BufferUsageFlags::STORAGE_BUFFER
+                    | vk::BufferUsageFlags::TRANSFER_DST,
             );
             let buffer_mem = engine_core::buffer::allocate_and_bind_buffer(
                 &instance,
@@ -408,9 +435,11 @@ impl LineLightApp {
                 &instance,
                 &physical_device,
                 &logical_device,
+                
                 u64::max(
                     (std::mem::size_of::<VertexType>() * vertices.len()) as u64,
-                    (std::mem::size_of::<IndexType>() * indices.len()) as u64,
+                    u64::max((std::mem::size_of::<IndexType>() * indices.len()) as u64,
+                    (std::mem::size_of::<IndexType>() * acceleration_indices.len()) as u64)
                 ),
             );
             staging_buffer.map_buffer_memory();
@@ -436,6 +465,17 @@ impl LineLightApp {
                 *staging_buffer,
                 *index_buffer,
                 (std::mem::size_of::<IndexType>() * indices.len()) as u64,
+            );
+            unsafe {
+                engine_core::write_vec_to_buffer(staging_buffer.memory_ptr.unwrap(), acceleration_indices)
+            };
+            engine_core::copy_buffer(
+                &logical_device,
+                command_pool,
+                graphics_queue,
+                *staging_buffer,
+                *acceleration_index_buffer,
+                (std::mem::size_of::<IndexType>() * acceleration_indices.len()) as u64,
             );
         }
 
@@ -553,6 +593,7 @@ impl LineLightApp {
             index_buffer: ManuallyDrop::new(index_buffer),
             vertex_buffer: ManuallyDrop::new(vertex_buffer),
             debug_buffer: ManuallyDrop::new(debug_buffer),
+            acceleration_index_buffer: ManuallyDrop::new(acceleration_index_buffer),
             descriptor_set_layout,
             descriptor_sets,
             _descriptor_pool: descriptor_pool,
@@ -655,7 +696,7 @@ impl LineLightApp {
                 .queue_present(self.present_queue, &present_info)
         }
     }
-    pub fn update_descriptor_sets(&self, num_verts: u64, num_indices: u64) {
+    pub fn update_descriptor_sets(&self, num_verts: u64, num_acceleration_indices: u64) {
         let descriptor_writes = {
             let mut v = Vec::with_capacity(self.descriptor_sets.len());
             for (i, set) in self.descriptor_sets.iter().enumerate() {
@@ -667,10 +708,10 @@ impl LineLightApp {
                     .buffer(**self.vertex_buffer)
                     .offset(0)
                     .range(std::mem::size_of::<VertexType>() as u64 * num_verts)];
-                let descriptor_reused_index_buffer_info = [*vk::DescriptorBufferInfo::builder()
-                    .buffer(**self.index_buffer)
+                let descriptor_acceleration_index_buffer_info = [*vk::DescriptorBufferInfo::builder()
+                    .buffer(**self.acceleration_index_buffer)
                     .offset(0)
-                    .range(std::mem::size_of::<IndexType>() as u64 * num_indices)];
+                    .range(std::mem::size_of::<IndexType>() as u64 * num_acceleration_indices)];
                 v.push(
                     *vk::WriteDescriptorSet::builder()
                         .dst_set(*set)
@@ -693,7 +734,7 @@ impl LineLightApp {
                         .dst_binding(3)
                         .dst_array_element(0)
                         .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                        .buffer_info(&descriptor_reused_index_buffer_info),
+                        .buffer_info(&descriptor_acceleration_index_buffer_info),
                 );
             }
             v
@@ -709,6 +750,7 @@ impl LineLightApp {
         shaders: &[shaders::Shader],
         debug_shaders: &[shaders::Shader],
         vertex_input_descriptors: &vk_engine::VertexInputDescriptors,
+        debug_input_descriptors: &vk_engine::VertexInputDescriptors,
         descriptor_set_bindings: &[vk::DescriptorSetLayoutBinding],
     ) {
         unsafe {
@@ -748,7 +790,7 @@ impl LineLightApp {
             render_pass,
             swapchain_extent,
             debug_shaders,
-            vertex_input_descriptors,
+            debug_input_descriptors,
             descriptor_set_layout,
             [0.0],
         );
