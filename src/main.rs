@@ -9,16 +9,16 @@ use winit::event_loop::ControlFlow;
 
 use tracy_client::{self, frame_mark, span};
 
+mod acceleration;
 mod datatypes;
 mod input_handling;
 mod linelight_vk;
 mod scene_loading;
-mod acceleration;
 
 use datatypes::*;
 use input_handling::*;
 
-use crate::acceleration::tri_aabb_intersect;
+use crate::acceleration::{tri_aabb_intersect, tri_aabb_precompute, precomputed_tri_aabb_intersect};
 
 // Some config options
 const SPEED: f32 = 1.0;
@@ -40,20 +40,28 @@ fn main() {
     // Stuff for debugging overlay
     // let aabb_center = vec3(0.0, 3.0, 0.0);
     // let aabb = (-Vec3::ONE + aabb_center, Vec3::ONE + aabb_center);
-    
+
     let mut scene = Scene::dragon(64);
-    let accel_struct = acceleration::build_acceleration_structure(&scene);
-    
-    let mut debug_overlay = DebugOverlay::aabb(accel_struct.bbox_origins[0], accel_struct.bbox_origins[0]+accel_struct.bbox_size);
-    let filtered_indices = scene.indices
+    let (accel_struct, accel_indices) = acceleration::build_acceleration_structure(&scene);
+
+    let mut debug_overlay = DebugOverlay::aabb(
+        accel_struct.bbox_origins[0],
+        accel_struct.bbox_origins[0] + accel_struct.bbox_size,
+    );
+    let filtered_indices = scene
+        .indices
         .chunks_exact(3)
         .filter(|&tri| {
             let v0 = scene.vertices[tri[0] as usize].position;
             let v1 = scene.vertices[tri[1] as usize].position;
             let v2 = scene.vertices[tri[2] as usize].position;
-            tri_aabb_intersect(v0, v1, v2, accel_struct.bbox_origins[0], accel_struct.bbox_size)
-        }).flatten().map(|i| *i).collect();
-    
+            let precompute = tri_aabb_precompute(v0, v1, v2, accel_struct.bbox_size);
+            accel_struct.bbox_origins.map(|p| precomputed_tri_aabb_intersect(&precompute, p)).into_iter().any(|b| b)
+        })
+        .flatten()
+        .map(|i| *i)
+        .collect();
+
     scene.indices = filtered_indices;
 
     let (mut app, event_loop, vid) =

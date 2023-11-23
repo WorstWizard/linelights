@@ -1,11 +1,11 @@
-use glam::{Vec3, vec3, vec2, Vec3Swizzles, Vec2};
+use glam::{vec2, vec3, Vec2, Vec3, Vec3Swizzles};
 
 use crate::scene_loading::Scene;
 
 // Schwarz 2010
 pub fn tri_aabb_intersect(v0: Vec3, v1: Vec3, v2: Vec3, p: Vec3, d_p: Vec3) -> bool {
     let precompute = tri_aabb_precompute(v0, v1, v2, d_p);
-    tri_precomputed_aabb_intersect(&precompute, p)
+    precomputed_tri_aabb_intersect(&precompute, p)
 }
 
 struct ProjNormalVals {
@@ -14,9 +14,9 @@ struct ProjNormalVals {
     n_zx: Vec2,
     d_xy: f32,
     d_yz: f32,
-    d_zx: f32
+    d_zx: f32,
 }
-struct PrecomputedVals {
+pub struct PrecomputedVals {
     n: Vec3,
     d_p: Vec3,
     d1: f32,
@@ -24,10 +24,10 @@ struct PrecomputedVals {
     tri_bbox: (Vec3, Vec3),
     pn_0: ProjNormalVals,
     pn_1: ProjNormalVals,
-    pn_2: ProjNormalVals
+    pn_2: ProjNormalVals,
 }
 
-fn tri_aabb_precompute(v0: Vec3, v1: Vec3, v2: Vec3, d_p: Vec3) -> PrecomputedVals {
+pub fn tri_aabb_precompute(v0: Vec3, v1: Vec3, v2: Vec3, d_p: Vec3) -> PrecomputedVals {
     fn step(x: f32) -> f32 {
         if x > 0.0 {
             1.0
@@ -59,74 +59,135 @@ fn tri_aabb_precompute(v0: Vec3, v1: Vec3, v2: Vec3, d_p: Vec3) -> PrecomputedVa
 
     fn projected_normal_vals(edge: Vec3, vert: Vec3, n: Vec3, d_p: Vec3) -> ProjNormalVals {
         let n_xy = vec2(-edge.y, edge.x) * if n.z >= 0.0 { 1.0 } else { -1.0 };
-        let d_xy = -n_xy.dot(vert.xy())
-            + f32::max(0.0, d_p.x * n_xy.x)
-            + f32::max(0.0, d_p.y * n_xy.y);
+        let d_xy =
+            -n_xy.dot(vert.xy()) + f32::max(0.0, d_p.x * n_xy.x) + f32::max(0.0, d_p.y * n_xy.y);
         let n_yz = vec2(-edge.z, edge.y) * if n.x >= 0.0 { 1.0 } else { -1.0 };
-        let d_yz = -n_yz.dot(vert.yz())
-            + f32::max(0.0, d_p.y * n_yz.x)
-            + f32::max(0.0, d_p.z * n_yz.y);
+        let d_yz =
+            -n_yz.dot(vert.yz()) + f32::max(0.0, d_p.y * n_yz.x) + f32::max(0.0, d_p.z * n_yz.y);
         let n_zx = vec2(-edge.x, edge.z) * if n.y >= 0.0 { 1.0 } else { -1.0 };
-        let d_zx = -n_zx.dot(vert.zx())
-            + f32::max(0.0, d_p.z * n_zx.x)
-            + f32::max(0.0, d_p.x * n_zx.y);
-        ProjNormalVals { n_xy, n_yz, n_zx, d_xy, d_yz, d_zx }
+        let d_zx =
+            -n_zx.dot(vert.zx()) + f32::max(0.0, d_p.z * n_zx.x) + f32::max(0.0, d_p.x * n_zx.y);
+        ProjNormalVals {
+            n_xy,
+            n_yz,
+            n_zx,
+            d_xy,
+            d_yz,
+            d_zx,
+        }
     }
 
     let pn_0 = projected_normal_vals(e0, v0, n, d_p);
     let pn_1 = projected_normal_vals(e1, v1, n, d_p);
     let pn_2 = projected_normal_vals(e2, v2, n, d_p);
 
-    PrecomputedVals { n, d_p, d1, d2, tri_bbox, pn_0, pn_1, pn_2 }
+    PrecomputedVals {
+        n,
+        d_p,
+        d1,
+        d2,
+        tri_bbox,
+        pn_0,
+        pn_1,
+        pn_2,
+    }
 }
 
-fn tri_precomputed_aabb_intersect(precompute: &PrecomputedVals, p: Vec3) -> bool {
+pub fn precomputed_tri_aabb_intersect(precompute: &PrecomputedVals, p: Vec3) -> bool {
     fn projected_normal_check(pn: &ProjNormalVals, p: Vec3) -> bool {
-        if pn.n_xy.dot(p.xy()) + pn.d_xy < 0.0 { return false }
-        if pn.n_yz.dot(p.yz()) + pn.d_yz < 0.0 { return false }
-        if pn.n_zx.dot(p.zx()) + pn.d_zx < 0.0 { return false }
+        if pn.n_xy.dot(p.xy()) + pn.d_xy < 0.0 {
+            return false;
+        }
+        if pn.n_yz.dot(p.yz()) + pn.d_yz < 0.0 {
+            return false;
+        }
+        if pn.n_zx.dot(p.zx()) + pn.d_zx < 0.0 {
+            return false;
+        }
         true
     }
     fn interval_overlaps(x1: f32, x2: f32, y1: f32, y2: f32) -> bool {
         !(x1 >= y2 || y1 >= x2)
     }
 
-    match &precompute { &PrecomputedVals {n, d_p, d1, d2, tri_bbox, pn_0, pn_1, pn_2 } => {
-        // Do the bounding boxes intersect
-        if !(interval_overlaps(tri_bbox.0.x, tri_bbox.1.x, p.x, (p + *d_p).x)
-        && interval_overlaps(tri_bbox.0.y, tri_bbox.1.y, p.y, (p + *d_p).y)
-        && interval_overlaps(tri_bbox.0.z, tri_bbox.1.z, p.z, (p + *d_p).z))
-        {
-            return false;
-        }
+    match &precompute {
+        &PrecomputedVals {
+            n,
+            d_p,
+            d1,
+            d2,
+            tri_bbox,
+            pn_0,
+            pn_1,
+            pn_2,
+        } => {
+            // Do the bounding boxes intersect
+            if !(interval_overlaps(tri_bbox.0.x, tri_bbox.1.x, p.x, (p + *d_p).x)
+                && interval_overlaps(tri_bbox.0.y, tri_bbox.1.y, p.y, (p + *d_p).y)
+                && interval_overlaps(tri_bbox.0.z, tri_bbox.1.z, p.z, (p + *d_p).z))
+            {
+                return false;
+            }
 
-        // Does the triangle plane intersect the box
-        if (n.dot(p) + d1) * (n.dot(p) + d2) > 0.0 {
-            return false;
-        }
+            // Does the triangle plane intersect the box
+            if (n.dot(p) + d1) * (n.dot(p) + d2) > 0.0 {
+                return false;
+            }
 
-        projected_normal_check(&pn_0, p) &&
-        projected_normal_check(&pn_1, p) &&
-        projected_normal_check(&pn_2, p)
-    }}
+            projected_normal_check(&pn_0, p)
+                && projected_normal_check(&pn_1, p)
+                && projected_normal_check(&pn_2, p)
+        }
+    }
 }
 
+const BBOX_COUNT: usize = 4;
+const MAX_INDICES: usize = 1 << 24; // With 32 bit indices, this is 2^24 * 4 bytes ~= 67MB, not that bad
 pub struct AccelStruct {
     pub bbox_size: Vec3,
-    pub bbox_origins: Vec<Vec3>
+    pub bbox_origins: [Vec3; BBOX_COUNT],
+    pub sizes: [u32; BBOX_COUNT], // Number of indices per bbox
 }
-
-pub fn build_acceleration_structure(scene: &Scene) -> AccelStruct {
+pub fn build_acceleration_structure(scene: &Scene) -> (AccelStruct, Vec<u32>) {
     let bbox_size = vec3(4.0, 4.0, 4.0);
-    let bbox_origins = vec![
+    let origins = vec![
         vec3(0.0, 0.0, 0.0),
         vec3(4.0, 0.0, 0.0),
-        vec3(-4.0, 0.0, 0.0),
+        vec3(0.0, 4.0, 0.0),
+        vec3(4.0, 4.0, 0.0),
     ];
+    let bbox_origins: [Vec3; BBOX_COUNT] = origins
+        .try_into()
+        .expect("Length of bboxes does not match BBOX_COUNT");
 
-    // for tri in scene.indices.chunks_exact(3) {
+    // For each triangle in the scene, check which bounding boxes contains the triangle (may be multiple)
+    // and fill their corresponding index-lists with the triangle indices
+    let mut index_arrays = vec![Vec::new(); BBOX_COUNT];
+    for tri_indices in scene.indices.chunks_exact(3) {
+        let v0 = scene.vertices[tri_indices[0] as usize].position;
+        let v1 = scene.vertices[tri_indices[1] as usize].position;
+        let v2 = scene.vertices[tri_indices[2] as usize].position;
 
-    // }
+        let precompute = tri_aabb_precompute(v0, v1, v2, bbox_size);
+        for (bbox_i, bbox_pos) in bbox_origins.iter().enumerate() {
+            if precomputed_tri_aabb_intersect(&precompute, *bbox_pos) {
+                index_arrays[bbox_i].extend_from_slice(tri_indices);
+            }
+        }
+    }
+    let sizes = index_arrays
+        .iter()
+        .map(|list| list.len() as u32)
+        .collect::<Vec<u32>>()
+        .try_into()
+        .unwrap();
 
-    AccelStruct { bbox_size, bbox_origins }
+    (
+        AccelStruct {
+            bbox_size,
+            bbox_origins,
+            sizes,
+        },
+        index_arrays.into_iter().flatten().collect(),
+    )
 }
