@@ -142,7 +142,9 @@ pub fn precomputed_tri_aabb_intersect(precompute: &PrecomputedVals, p: Vec3) -> 
 }
 
 const BBOX_COUNT: usize = 4;
-const MAX_INDICES: usize = 1 << 24; // With 32 bit indices, this is 2^24 * 4 bytes ~= 67MB, not that bad
+// const MAX_INDICES: usize = 1 << 24; // With 32 bit indices, this is 2^24 * 4 bytes ~= 67MB, not that bad
+#[derive(Clone)]
+#[repr(C)]
 pub struct AccelStruct {
     pub bbox_size: Vec3,
     pub bbox_origins: [Vec3; BBOX_COUNT],

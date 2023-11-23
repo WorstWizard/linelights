@@ -41,8 +41,9 @@ fn main() {
     // let aabb_center = vec3(0.0, 3.0, 0.0);
     // let aabb = (-Vec3::ONE + aabb_center, Vec3::ONE + aabb_center);
 
-    let mut scene = Scene::dragon(64);
+    let scene = Scene::dragon(64);
     let (accel_struct, accel_indices) = acceleration::build_acceleration_structure(&scene);
+    println!("indices in first box: {}", accel_struct.sizes[0]);
 
     let mut debug_overlay = DebugOverlay::aabb(
         accel_struct.bbox_origins[0],
@@ -194,6 +195,7 @@ fn main() {
                 mvp.projection =
                     Mat4::perspective_infinite_rh(f32::to_radians(90.0), aspect_ratio, 0.01);
                 let ubo = LineLightUniform {
+                    accel_struct: accel_struct.clone(),
                     l0: Vec4::from((scene.light.0, 1.0)),
                     l1: Vec4::from((scene.light.1, 1.0)),
                     mvp: mvp.clone(),

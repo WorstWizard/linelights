@@ -1,14 +1,12 @@
 use std::f32::consts::PI;
-
 use glam::{Quat, Vec3};
-
-// use crate::ARR_MAX;
 
 #[repr(C)]
 pub struct LineLightUniform {
     pub mvp: vk_engine::MVP,
     pub l0: glam::Vec4,
     pub l1: glam::Vec4,
+    pub accel_struct: crate::acceleration::AccelStruct,
 }
 
 #[repr(C)]
