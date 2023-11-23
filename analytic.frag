@@ -5,12 +5,20 @@ layout(location = 0) in vec3 inPos;
 layout(location = 1) in vec3 inNormal;
 layout(location = 0) out vec4 outColor;
 
-layout(binding = 0) uniform UBO {
+const int BBOX_COUNT = 4;
+struct AccelStruct {
+    vec3 bbox_size;
+    vec3 bbox_origins[BBOX_COUNT];
+    uint sizes[BBOX_COUNT];
+};
+
+layout(scalar, binding = 0) uniform UBO {
     mat4 model;
     mat4 view;
     mat4 proj;
     vec4 l0_ubo;
     vec4 l1_ubo;
+    AccelStruct accel_struct;
 };
 
 struct Vertex {
@@ -21,7 +29,7 @@ layout(scalar, binding = 2) readonly buffer vertexBuffer {
     Vertex verts[];
 };
 layout(binding = 3) readonly buffer indexBuffer {
-    uint indices[];
+    uint acceleration_indices[];
 };
 
 vec3 to_world(vec3 v) {
@@ -360,31 +368,46 @@ void main() {
     vec3 l1 = to_world(l1_ubo);
     vec3 L = l1 - l0;
 
+    // Precompute AABB grid intermediate values for fast intersection
+    PrecomputeVals precompute = tri_aabb_precompute(l0_ubo.xyz, l1_ubo.xyz, inPos, accel_struct.bbox_size);
+
     // Initialize interval array
     IntervalArray int_arr;
     int_arr.size = 0;
     add_interval(int_arr, vec2(0.0,1.0));
-    
-    // For each triangle, compute whether it could occlude the linelight, if so, update intervals
-    for (int i = 0; i < indices.length(); i += 3) {
-        if (int_arr.size == 0) break; // Early stop
 
-        vec3 v0 = to_world(verts[indices[i]].pos);
-        vec3 v1 = to_world(verts[indices[i+1]].pos);
-        vec3 v2 = to_world(verts[indices[i+2]].pos);
+    // For each bounding box, test first if it intersects the light-triangle at all
+    int buffer_offset = 0;
+    bool early_out = false;
+    for (int bbox_i=0; bbox_i<BBOX_COUNT; bbox_i++) {
+        // If it does, iterate over triangles inside the bounding box
+        uint num_bbox_indices = accel_struct.sizes[bbox_i];
+        // if (true) {
+        if (tri_aabb_intersect(precompute, accel_struct.bbox_origins[bbox_i])) {
+            if (early_out) break;
 
-        vec2 interval;
-        if (tri_tri_intersect_custom(l0,l1,pos+0.001*n, v0,v1,v2, interval)) {
-            occlude_intervals(int_arr, interval);
-            // This turned out to be slower
-            // if (int_arr.size == 1) { // Shrink light to the only visible interval to speed up future intersections
-            //     vec2 remaining_interval = int_arr.data[0];
-            //     l0_eff = max(0.0, remaining_interval.x) * L + l0;
-            //     l1_eff = min(1.0, remaining_interval.y) * L + l0;
-            //     int_arr.data[0] = vec2(0.0,1.0);
-            // }
+
+            // For each triangle, compute whether it could occlude the linelight, if so, update intervals
+            for (int i = buffer_offset; i < buffer_offset+num_bbox_indices; i += 3) {
+                if (int_arr.size == 0) early_out = true; // Early stop
+                if (early_out) break;
+
+                vec3 v0 = to_world(verts[acceleration_indices[i]].pos);
+                vec3 v1 = to_world(verts[acceleration_indices[i+1]].pos);
+                vec3 v2 = to_world(verts[acceleration_indices[i+2]].pos);
+
+                vec2 interval;
+                if (tri_tri_intersect_custom(l0,l1,pos+0.001*n, v0,v1,v2, interval)) {
+                    occlude_intervals(int_arr, interval);
+                }
+            }
+
+
         }
+        buffer_offset += int(num_bbox_indices);
     }
+    
+
 
     float irr = 0.0;
     for (int i = 0; i < int_arr.size; i++) {

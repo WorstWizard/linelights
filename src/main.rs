@@ -27,7 +27,7 @@ fn main() {
     let _client = tracy_client::Client::start();
     let _span = span!("init");
 
-    let shaders = linelight_vk::make_shaders("aabb_test.vert", "aabb_test.frag");
+    let shaders = linelight_vk::make_shaders("simple_shader.vert", "analytic.frag");
     let debug_shaders = linelight_vk::make_shaders("debugger.vert", "debugger.frag");
     let ubo_bindings = linelight_vk::make_ubo_bindings();
     println!("Loading model...");
@@ -39,7 +39,7 @@ fn main() {
     // let aabb_center = vec3(0.0, 3.0, 0.0);
     // let aabb = (-Vec3::ONE + aabb_center, Vec3::ONE + aabb_center);
 
-    let scene = Scene::dragon(64);
+    let scene = Scene::dragon(16);
     let (accel_struct, accel_indices) = acceleration::build_acceleration_structure(&scene);
     println!("indices in first box: {}", accel_struct.sizes[0]);
 
