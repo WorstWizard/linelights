@@ -148,7 +148,7 @@ vec2 compute_intervals_custom(
     // If one intersection is further away from the line than the sampled point,
     // its corresponding t-value should be at infinity
     const float INF = 1e10;
-    // Let t0 correspond to the point closer than pos, t1 the more distant point
+    // Let t1 correspond to the point closer than pos, t0 the more distant point
     // Ergo, t0 will be put at +/- infinity, while t1 is kept
     if (di1 >= dp) t1 = t0;
     
@@ -156,18 +156,15 @@ vec2 compute_intervals_custom(
     bool intersects_right = linesegments_intersect(l1.xz,pos.xz,isect0.xz,isect1.xz);
     if (intersects_left) {
         if (intersects_right) { // Both
-            t0 = -sign(t1) * INF;
+            return vec2(-1.0, 2.0);
         } else { // Only left
-            t0 = -INF;
+            return vec2(-INF, t1);
         }
     } else if (intersects_right) { // Only right
-        t0 = INF;
+        return vec2(t1, INF);
     } else {
         return vec2(2.0, 2.0);
     }
-
-    sort(t0, t1);
-    return vec2(t0, t1);
 }
 
 
