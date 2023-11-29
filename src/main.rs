@@ -295,7 +295,7 @@ fn take_screenshot(app: &linelight_vk::LineLightApp, img_index: u32) {
         )
     };
     drop(_transfer_span);
-    let _save_span = span!("Saving to file");
+    let _copy_span = span!("Copying buffer to CPU");
     let samples = unsafe {
         std::slice::from_raw_parts(
             screenshot_buffer.memory_ptr.unwrap() as *const u8,
@@ -303,15 +303,21 @@ fn take_screenshot(app: &linelight_vk::LineLightApp, img_index: u32) {
         )
     };
     let mut img = image::RgbaImage::from_raw(width, height, samples.into()).unwrap();
-    for pix in img.pixels_mut() {
-        let b = pix.0[0];
-        pix.0[0] = pix.0[2];
-        pix.0[2] = b;
-    }
-    match img.save_with_format("output.png", image::ImageFormat::Png) {
-        Ok(_) => println!("Saved screenshot to 'output.png'"),
-        Err(_) => println!("Failed to save screenshot"),
-    }
+    drop(_copy_span);
+
+    // Save file in detached thread: This takes a little while and doesn't need to block
+    std::thread::spawn(move || {
+        let _thread_span = span!("Saving screenshot to file");
+        for pix in img.pixels_mut() {
+            let b = pix.0[0];
+            pix.0[0] = pix.0[2];
+            pix.0[2] = b;
+        }
+        match img.save_with_format("screenshot.png", image::ImageFormat::Png) {
+            Ok(_) => println!("Saved screenshot to 'screenshot.png'"),
+            Err(_) => println!("Failed to save screenshot"),
+        }
+    });
 }
 
 fn drawing_commands(
