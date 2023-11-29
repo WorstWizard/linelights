@@ -151,21 +151,28 @@ pub struct AccelStruct {
     pub sizes: [u32; BBOX_COUNT], // Number of indices per bbox
 }
 pub fn build_acceleration_structure(scene: &Scene) -> (AccelStruct, Vec<u32>, (Vec3, Vec3)) {
-    
     let scene_aabb = {
         let mut min = scene.vertices[0].position;
         let mut max = min;
         for pos in scene.vertices.iter().map(|v| v.position) {
-            if pos.x < min.x { min.x = pos.x }
-            else if pos.x > max.x { max.x = pos.x }
-            if pos.y < min.y { min.y = pos.y }
-            else if pos.y > max.y { max.y = pos.y }
-            if pos.z < min.z { min.z = pos.z }
-            else if pos.z > max.z { max.z = pos.z }
+            if pos.x < min.x {
+                min.x = pos.x
+            } else if pos.x > max.x {
+                max.x = pos.x
+            }
+            if pos.y < min.y {
+                min.y = pos.y
+            } else if pos.y > max.y {
+                max.y = pos.y
+            }
+            if pos.z < min.z {
+                min.z = pos.z
+            } else if pos.z > max.z {
+                max.z = pos.z
+            }
         }
         (min - Vec3::splat(0.1), max + Vec3::splat(0.1))
     };
-
 
     let bbox_size = vec3(10.0, 7.5, 10.0);
     let corner_origin = vec3(-10.0, -0.2, -10.0);
@@ -208,6 +215,6 @@ pub fn build_acceleration_structure(scene: &Scene) -> (AccelStruct, Vec<u32>, (V
             sizes,
         },
         index_arrays.into_iter().flatten().collect(),
-        scene_aabb
+        scene_aabb,
     )
 }

@@ -8,9 +8,10 @@ use winit::{
 pub struct Inputs {
     pub cursor_pos: Vec2,
     last_cursor_pos: Vec2,
-    // pub left_click_just_pressed: bool, // True if left click was pressed this frame
     pub left_click: bool,
     pub right_click: bool,
+
+    pub screenshot: bool,
 
     pub move_forward: bool,
     pub move_backward: bool,
@@ -47,6 +48,8 @@ impl Inputs {
                     };
                     match keycode {
                         VirtualKeyCode::Escape => *control_flow = ControlFlow::Exit,
+
+                        VirtualKeyCode::P => self.screenshot = pressed,
 
                         // WASD + Space/Ctrl Flying camera movement
                         VirtualKeyCode::W => self.move_forward = pressed,

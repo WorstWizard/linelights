@@ -1,7 +1,7 @@
 use ash::vk;
 use glam::{vec2, vec3, vec4, Mat4, Vec2, Vec3, Vec3Swizzles, Vec4, Vec4Swizzles};
 use scene_loading::Scene;
-use vk_engine::engine_core::write_struct_to_buffer;
+use vk_engine::engine_core::{self, write_struct_to_buffer};
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::ControlFlow;
 
@@ -37,16 +37,19 @@ fn main() {
     // let aabb_center = vec3(0.0, 3.0, 0.0);
     // let aabb = (-Vec3::ONE + aabb_center, Vec3::ONE + aabb_center);
 
-    let scene = Scene::dragon(16);
-    let (accel_struct, accel_indices, scene_aabb) = acceleration::build_acceleration_structure(&scene);
+    let scene = Scene::dragon(64);
+    let (accel_struct, accel_indices, scene_aabb) =
+        acceleration::build_acceleration_structure(&scene);
 
-    let mut debug_overlay = DebugOverlay::aabb(
-        scene_aabb.0,
-        scene_aabb.1
+    let mut debug_overlay = DebugOverlay::aabb(scene_aabb.0, scene_aabb.1);
+
+    let (mut app, event_loop, vid, did) = linelight_vk::make_custom_app(
+        &shaders,
+        &debug_shaders,
+        &ubo_bindings,
+        &scene,
+        &accel_indices,
     );
-
-    let (mut app, event_loop, vid, did) =
-        linelight_vk::make_custom_app(&shaders, &debug_shaders, &ubo_bindings, &scene, &accel_indices);
 
     let mut current_frame = 0;
     let mut timer = std::time::Instant::now();
@@ -61,7 +64,8 @@ fn main() {
     }
 
     let mut inputs = Inputs::default();
-    // Facing wrong way? Everything regarding view/projection is scuffed, gotta fix it at some point
+    let mut just_took_screenshot = false; // Helper variable to ensure only one is taken per keypress
+                                       // Facing wrong way? Everything regarding view/projection is scuffed, gotta fix it at some point
     let mut camera = Camera::new();
     // camera.eye = vec3(0.0, -4.0, 5.0);
     camera.eye = vec3(0.0, -6.0, 0.0);
@@ -230,6 +234,14 @@ fn main() {
                 _span.end_zone();
                 _span.upload_timestamp(t_stamp.0, t_stamp.1);
 
+                // After drawing, grab a screenshot if requested
+                if inputs.screenshot && !just_took_screenshot {
+                    just_took_screenshot = true;
+                    take_screenshot(&app, img_index);
+                } else if !inputs.screenshot {
+                    just_took_screenshot = false;
+                }
+
                 match app.present_image(img_index, app.sync.render_finished[current_frame]) {
                     Ok(true) | Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
                         app.recreate_swapchain(&shaders, &debug_shaders, &vid, &did, &ubo_bindings)
@@ -244,6 +256,62 @@ fn main() {
             _ => (),
         }
     });
+}
+
+fn take_screenshot(app: &linelight_vk::LineLightApp, img_index: u32) {
+    let (width, height) = (app.swapchain_extent.width, app.swapchain_extent.height);
+
+    let _screenshot_span = span!("Take screenshot");
+    let _buffer_span = span!("Buffer creation");
+    let (screenshot_buffer, memory_size) = app.make_screenshot_buffer();
+    drop(_buffer_span);
+    let _transfer_span = span!("Data transfer");
+    let buf_copy = vk::BufferImageCopy::builder()
+        .image_extent(vk::Extent3D {
+            width,
+            height,
+            depth: 1,
+        })
+        .image_subresource(
+            *vk::ImageSubresourceLayers::builder()
+                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                .layer_count(1),
+        );
+
+    unsafe {
+        engine_core::immediate_commands(
+            &app.logical_device,
+            app.command_pool,
+            app.graphics_queue,
+            |buf| {
+                app.logical_device.cmd_copy_image_to_buffer(
+                    buf,
+                    app.swapchain_images[img_index as usize],
+                    vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                    screenshot_buffer.buffer,
+                    &[*buf_copy],
+                );
+            },
+        )
+    };
+    drop(_transfer_span);
+    let _save_span = span!("Saving to file");
+    let samples = unsafe {
+        std::slice::from_raw_parts(
+            screenshot_buffer.memory_ptr.unwrap() as *const u8,
+            memory_size as usize,
+        )
+    };
+    let mut img = image::RgbaImage::from_raw(width, height, samples.into()).unwrap();
+    for pix in img.pixels_mut() {
+        let b = pix.0[0];
+        pix.0[0] = pix.0[2];
+        pix.0[2] = b;
+    }
+    match img.save_with_format("output.png", image::ImageFormat::Png) {
+        Ok(_) => println!("Saved screenshot to 'output.png'"),
+        Err(_) => println!("Failed to save screenshot"),
+    }
 }
 
 fn drawing_commands(
@@ -309,17 +377,6 @@ fn drawing_commands(
             &[app.descriptor_sets[buffer_index]],
             &[],
         );
-
-        // Drawing commands begin
-        // let _span = if let Some(ctx) = gpu_ctx {
-        //     app.logical_device.cmd_write_timestamp(
-        //         app.command_buffers[buffer_index],
-        //         vk::PipelineStageFlags::TOP_OF_PIPE,
-        //         app.query_pool,
-        //         0,
-        //     );
-        //     Some(ctx.span_alloc("Drawing", "drawing_commands", "main.rs", 387).unwrap())
-        // } else { None };
         app.logical_device.cmd_draw_indexed(
             app.command_buffers[buffer_index],
             num_indices,
@@ -328,15 +385,6 @@ fn drawing_commands(
             0,
             0,
         );
-        // if let Some(mut span) = _span {
-        //     app.logical_device.cmd_write_timestamp(
-        //         app.command_buffers[buffer_index],
-        //         vk::PipelineStageFlags::BOTTOM_OF_PIPE,
-        //         app.query_pool,
-        //         1,
-        //     );
-        //     span.end_zone();
-        // }
 
         // Debug drawing subpass
         app.logical_device.cmd_next_subpass(
@@ -396,7 +444,7 @@ fn update_debug_overlay(
         1.0,
     ));
     point_in_scene_space_1 *= Vec4::splat(1.0 / point_in_scene_space_1.w);
-    let dir = (point_in_scene_space_1-point_in_scene_space_0)
+    let dir = (point_in_scene_space_1 - point_in_scene_space_0)
         .xyz()
         .normalize();
 

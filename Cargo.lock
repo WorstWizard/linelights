@@ -666,6 +666,7 @@ dependencies = [
  "cstr",
  "glam",
  "gltf",
+ "image",
  "raw-window-handle",
  "tobj",
  "tracy-client",
@@ -1548,7 +1549,7 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 [[package]]
 name = "vk_engine"
 version = "0.1.1"
-source = "git+https://github.com/WorstWizard/vk_engine.git?branch=linelights#4cb52de2a71689748c419eb1705bcf4d894df632"
+source = "git+https://github.com/WorstWizard/vk_engine.git?branch=linelights#3f5b1bb385c7df52458d9f6c53e851f6aa1e80e0"
 dependencies = [
  "ash",
  "ash-window",

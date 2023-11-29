@@ -8,6 +8,7 @@ use std::ffi::CString;
 use std::ffi::{c_char, CStr};
 use std::mem::ManuallyDrop;
 use std::rc::Rc;
+use vk_engine::engine_core::ManagedBuffer;
 use vk_engine::{engine_core, shaders};
 
 use tracy_client::span;
@@ -77,7 +78,7 @@ pub fn make_custom_app(
     debug_shaders: &[vk_engine::shaders::Shader],
     ubo_bindings: &[vk::DescriptorSetLayoutBinding],
     scene: &Scene,
-    acceleration_indices: &Vec<u32>
+    acceleration_indices: &Vec<u32>,
 ) -> (
     LineLightApp,
     winit::event_loop::EventLoop<()>,
@@ -112,16 +113,20 @@ pub fn make_custom_app(
         ubo_bindings.clone(),
         &scene.vertices,
         &scene.indices,
-        acceleration_indices
+        acceleration_indices,
     );
 
-    app.update_descriptor_sets(scene.vertices.len() as u64, acceleration_indices.len() as u64);
+    app.update_descriptor_sets(
+        scene.vertices.len() as u64,
+        acceleration_indices.len() as u64,
+    );
     (app, event_loop, vid, did)
 }
 
 pub struct LineLightApp {
     swapchain_loader: ash::extensions::khr::Swapchain,
     swapchain: vk::SwapchainKHR,
+    pub swapchain_images: Vec<vk::Image>,
     pub swapchain_extent: vk::Extent2D,
     image_views: Vec<vk::ImageView>,
     pub framebuffers: Vec<vk::Framebuffer>,
@@ -151,7 +156,7 @@ pub struct LineLightApp {
     debug_messenger: vk::DebugUtilsMessengerEXT,
     pub query_pool: vk::QueryPool,
     pub logical_device: Rc<ash::Device>,
-    instance: Box<ash::Instance>,
+    pub instance: Box<ash::Instance>,
 }
 impl Drop for LineLightApp {
     fn drop(&mut self) {
@@ -209,7 +214,7 @@ impl LineLightApp {
         descriptor_set_bindings: &[vk::DescriptorSetLayoutBinding],
         vertices: &Vec<Vertex>,
         indices: &Vec<u32>,
-        acceleration_indices: &Vec<u32>
+        acceleration_indices: &Vec<u32>,
     ) -> Self {
         let _span = span!("LineLightApp::new()");
 
@@ -389,8 +394,7 @@ impl LineLightApp {
             let buffer = engine_core::buffer::create_buffer(
                 &logical_device,
                 (std::mem::size_of::<IndexType>() * indices.len()) as u64,
-                vk::BufferUsageFlags::INDEX_BUFFER
-                    | vk::BufferUsageFlags::TRANSFER_DST,
+                vk::BufferUsageFlags::INDEX_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
             );
             let buffer_mem = engine_core::buffer::allocate_and_bind_buffer(
                 &instance,
@@ -411,8 +415,7 @@ impl LineLightApp {
             let buffer = engine_core::buffer::create_buffer(
                 &logical_device,
                 (std::mem::size_of::<IndexType>() * acceleration_indices.len()) as u64,
-                vk::BufferUsageFlags::STORAGE_BUFFER
-                    | vk::BufferUsageFlags::TRANSFER_DST,
+                vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
             );
             let buffer_mem = engine_core::buffer::allocate_and_bind_buffer(
                 &instance,
@@ -435,11 +438,12 @@ impl LineLightApp {
                 &instance,
                 &physical_device,
                 &logical_device,
-                
                 u64::max(
                     (std::mem::size_of::<VertexType>() * vertices.len()) as u64,
-                    u64::max((std::mem::size_of::<IndexType>() * indices.len()) as u64,
-                    (std::mem::size_of::<IndexType>() * acceleration_indices.len()) as u64)
+                    u64::max(
+                        (std::mem::size_of::<IndexType>() * indices.len()) as u64,
+                        (std::mem::size_of::<IndexType>() * acceleration_indices.len()) as u64,
+                    ),
                 ),
             );
             staging_buffer.map_buffer_memory();
@@ -467,7 +471,10 @@ impl LineLightApp {
                 (std::mem::size_of::<IndexType>() * indices.len()) as u64,
             );
             unsafe {
-                engine_core::write_vec_to_buffer(staging_buffer.memory_ptr.unwrap(), acceleration_indices)
+                engine_core::write_vec_to_buffer(
+                    staging_buffer.memory_ptr.unwrap(),
+                    acceleration_indices,
+                )
             };
             engine_core::copy_buffer(
                 &logical_device,
@@ -586,6 +593,7 @@ impl LineLightApp {
             logical_device,
             present_queue,
             swapchain,
+            swapchain_images,
             swapchain_loader,
             sync,
             uniform_buffers: ManuallyDrop::new(uniform_buffers),
@@ -684,6 +692,45 @@ impl LineLightApp {
         image_index: u32,
         wait_semaphore: vk::Semaphore,
     ) -> Result<bool, vk::Result> {
+        let barrier = vk::ImageMemoryBarrier::builder()
+            .old_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+            .new_layout(vk::ImageLayout::PRESENT_SRC_KHR)
+            .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .image(self.swapchain_images[image_index as usize])
+            .subresource_range(
+                *vk::ImageSubresourceRange::builder()
+                    .aspect_mask(vk::ImageAspectFlags::COLOR)
+                    .base_mip_level(0)
+                    .level_count(1)
+                    .base_array_layer(0)
+                    .layer_count(1),
+            )
+            .src_access_mask(vk::AccessFlags::empty())
+            .dst_access_mask(vk::AccessFlags::empty());
+
+        let src_stage = vk::PipelineStageFlags::TOP_OF_PIPE;
+        let dst_stage = vk::PipelineStageFlags::BOTTOM_OF_PIPE;
+
+        unsafe {
+            vk_engine::engine_core::immediate_commands(
+                &self.logical_device,
+                self.command_pool,
+                self.graphics_queue,
+                |cmd_buffer| {
+                    self.logical_device.cmd_pipeline_barrier(
+                        cmd_buffer,
+                        src_stage,
+                        dst_stage,
+                        vk::DependencyFlags::empty(),
+                        &[],
+                        &[],
+                        &[*barrier],
+                    );
+                },
+            );
+        }
+
         let swapchain_arr = [self.swapchain];
         let image_index_arr = [image_index];
         let wait_semaphore_arr = [wait_semaphore];
@@ -708,10 +755,11 @@ impl LineLightApp {
                     .buffer(**self.vertex_buffer)
                     .offset(0)
                     .range(std::mem::size_of::<VertexType>() as u64 * num_verts)];
-                let descriptor_acceleration_index_buffer_info = [*vk::DescriptorBufferInfo::builder()
-                    .buffer(**self.acceleration_index_buffer)
-                    .offset(0)
-                    .range(std::mem::size_of::<IndexType>() as u64 * num_acceleration_indices)];
+                let descriptor_acceleration_index_buffer_info =
+                    [*vk::DescriptorBufferInfo::builder()
+                        .buffer(**self.acceleration_index_buffer)
+                        .offset(0)
+                        .range(std::mem::size_of::<IndexType>() as u64 * num_acceleration_indices)];
                 v.push(
                     *vk::WriteDescriptorSet::builder()
                         .dst_set(*set)
@@ -743,6 +791,33 @@ impl LineLightApp {
             self.logical_device
                 .update_descriptor_sets(&descriptor_writes, &[])
         }
+    }
+
+    pub fn make_screenshot_buffer(&self) -> (ManagedBuffer, u64) {
+        let (physical_device, _) =
+            engine_core::find_physical_device(&self.instance, &self.surface_loader, &self.surface);
+        let memory_size =
+            4 * self.swapchain_extent.width as u64 * self.swapchain_extent.height as u64;
+        let buffer = engine_core::buffer::create_buffer(
+            &self.logical_device,
+            memory_size,
+            vk::BufferUsageFlags::TRANSFER_DST,
+        );
+        let memory = engine_core::buffer::allocate_and_bind_buffer(
+            &self.instance,
+            &physical_device,
+            &self.logical_device,
+            buffer,
+            vk::MemoryPropertyFlags::HOST_VISIBLE,
+        );
+        let mut screenshot_buffer = engine_core::ManagedBuffer {
+            buffer,
+            logical_device: Rc::clone(&self.logical_device),
+            buffer_memory: Some(memory),
+            memory_ptr: None,
+        };
+        screenshot_buffer.map_buffer_memory();
+        (screenshot_buffer, memory_size)
     }
 
     pub fn recreate_swapchain(
@@ -909,55 +984,6 @@ impl LineLightApp {
         };
         props.limits.timestamp_period
     }
-    // pub fn record_immediate_timestamp(&self, command_buffer: vk::CommandBuffer, before_after: bool) {
-    //     // Reuse the current command buffer instead of reallocating (to get accurate results?)
-    //     let recording_info = vk::CommandBufferBeginInfo::builder()
-    //         .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
-    //     let submit_info = *vk::SubmitInfo::builder().command_buffers(&[command_buffer]);
-    //     unsafe {
-    //         self.logical_device
-    //             .begin_command_buffer(command_buffer, &recording_info)
-    //             .unwrap();
-    //         if before_after {
-    //             self.logical_device.cmd_write_timestamp(
-    //                 command_buffer,
-    //                 vk::PipelineStageFlags::TOP_OF_PIPE,
-    //                 self.query_pool,
-    //                 0,
-    //             );
-    //         } else {
-    //             self.logical_device.cmd_write_timestamp(
-    //                 command_buffer,
-    //                 vk::PipelineStageFlags::BOTTOM_OF_PIPE,
-    //                 self.query_pool,
-    //                 1,
-    //             );
-    //         }
-    //         self.logical_device
-    //             .end_command_buffer(command_buffer)
-    //             .unwrap();
-    //         self.logical_device
-    //             .queue_submit(self.graphics_queue, &[submit_info], vk::Fence::null())
-    //             .unwrap();
-    //         self.logical_device
-    //             .queue_wait_idle(self.graphics_queue)
-    //             .unwrap();
-    //     }
-    // }
-    // pub fn get_timestamps(&self) -> [i64; 2] {
-    //     let mut timestamps: [i64; 2] = [0, 0];
-    //     unsafe {
-    //         self.logical_device.get_query_pool_results(
-    //             self.query_pool,
-    //             0,
-    //             2,
-    //             &mut timestamps,
-    //             vk::QueryResultFlags::TYPE_64 | vk::QueryResultFlags::WAIT,
-    //         )
-    //     }
-    //     .expect("Couldn't get timestamp");
-    //     timestamps
-    // }
 }
 
 fn render_pass(logical_device: &ash::Device, image_format: vk::Format) -> vk::RenderPass {
@@ -969,7 +995,7 @@ fn render_pass(logical_device: &ash::Device, image_format: vk::Format) -> vk::Re
         .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
         .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
         .initial_layout(vk::ImageLayout::UNDEFINED)
-        .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)];
+        .final_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)];
     let depth_attachments = [*vk::AttachmentDescription::builder()
         .format(vk::Format::D32_SFLOAT)
         .samples(vk::SampleCountFlags::TYPE_1)

@@ -1,5 +1,5 @@
-use std::f32::consts::PI;
 use glam::{Quat, Vec3};
+use std::f32::consts::PI;
 
 #[repr(C)]
 pub struct LineLightUniform {
