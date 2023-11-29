@@ -12,6 +12,7 @@ pub struct Inputs {
     pub right_click: bool,
 
     pub screenshot: bool,
+    pub info: bool,
 
     pub move_forward: bool,
     pub move_backward: bool,
@@ -50,6 +51,7 @@ impl Inputs {
                         VirtualKeyCode::Escape => *control_flow = ControlFlow::Exit,
 
                         VirtualKeyCode::P => self.screenshot = pressed,
+                        VirtualKeyCode::I => self.info = pressed,
 
                         // WASD + Space/Ctrl Flying camera movement
                         VirtualKeyCode::W => self.move_forward = pressed,

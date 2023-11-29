@@ -65,11 +65,14 @@ fn main() {
 
     let mut inputs = Inputs::default();
     let mut just_took_screenshot = false; // Helper variable to ensure only one is taken per keypress
-                                       // Facing wrong way? Everything regarding view/projection is scuffed, gotta fix it at some point
+    let mut just_printed_info = false;
+    // Facing wrong way? Everything regarding view/projection is scuffed, gotta fix it at some point
     let mut camera = Camera::new();
     // camera.eye = vec3(0.0, -4.0, 5.0);
-    camera.eye = vec3(0.0, -6.0, 0.0);
-    camera.rotate(0.0, std::f32::consts::FRAC_PI_2);
+    // camera.eye = vec3(0.0, -6.0, 0.0);
+    // camera.rotate(std::f32::consts::FRAC_PI_2, 0.0);
+    camera.eye = vec3(-1.3054297, -2.1971848, -4.514163);
+    camera.rotate(0.3527179, -2.8560042);
 
     let model_pos = vec3(0.0, 0.0, 0.0);
     let model_scale = 0.5;
@@ -169,7 +172,7 @@ fn main() {
 
                 let cursor_delta = inputs.cursor_delta();
                 if inputs.right_click {
-                    camera.rotate(-cursor_delta.x * 0.01, cursor_delta.y * 0.01);
+                    camera.rotate(cursor_delta.y * 0.01, -cursor_delta.x * 0.01,);
                 }
 
                 mvp.view = Mat4::look_to_rh(camera.eye, camera.direction(), camera.up());
@@ -184,6 +187,12 @@ fn main() {
                     l1: Vec4::from((scene.light.1, 1.0)),
                     mvp: mvp.clone(),
                 };
+                if inputs.info && !just_printed_info {
+                    just_printed_info = true;
+                    println!("Camera:\n\t Position: {}, Direction: {}, Angles: {:?}", camera.eye, camera.direction(), camera.polar_angles());
+                } else if !inputs.info {
+                    just_printed_info = false;
+                }
 
                 let mut t_stamp = (0, 0);
                 let mut _span;
