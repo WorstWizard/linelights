@@ -1,5 +1,3 @@
-use std::ops::Sub;
-
 use ash::vk;
 use glam::{vec2, vec3, vec4, Mat4, Vec2, Vec3, Vec3Swizzles, Vec4, Vec4Swizzles};
 use scene_loading::Scene;
@@ -40,28 +38,12 @@ fn main() {
     // let aabb = (-Vec3::ONE + aabb_center, Vec3::ONE + aabb_center);
 
     let scene = Scene::dragon(16);
-    let (accel_struct, accel_indices) = acceleration::build_acceleration_structure(&scene);
-    println!("indices in first box: {}", accel_struct.sizes[0]);
+    let (accel_struct, accel_indices, scene_aabb) = acceleration::build_acceleration_structure(&scene);
 
     let mut debug_overlay = DebugOverlay::aabb(
-        accel_struct.bbox_origins[0],
-        accel_struct.bbox_origins[0] + accel_struct.bbox_size,
+        scene_aabb.0,
+        scene_aabb.1
     );
-    // let filtered_indices = scene
-    //     .indices
-    //     .chunks_exact(3)
-    //     .filter(|&tri| {
-    //         let v0 = scene.vertices[tri[0] as usize].position;
-    //         let v1 = scene.vertices[tri[1] as usize].position;
-    //         let v2 = scene.vertices[tri[2] as usize].position;
-    //         let precompute = tri_aabb_precompute(v0, v1, v2, accel_struct.bbox_size);
-    //         accel_struct.bbox_origins.map(|p| precomputed_tri_aabb_intersect(&precompute, p)).into_iter().any(|b| b)
-    //     })
-    //     .flatten()
-    //     .map(|i| *i)
-    //     .collect();
-
-    // scene.indices = filtered_indices;
 
     let (mut app, event_loop, vid, did) =
         linelight_vk::make_custom_app(&shaders, &debug_shaders, &ubo_bindings, &scene, &accel_indices);
@@ -414,8 +396,7 @@ fn update_debug_overlay(
         1.0,
     ));
     point_in_scene_space_1 *= Vec4::splat(1.0 / point_in_scene_space_1.w);
-    let dir = point_in_scene_space_1
-        .sub(point_in_scene_space_0)
+    let dir = (point_in_scene_space_1-point_in_scene_space_0)
         .xyz()
         .normalize();
 
