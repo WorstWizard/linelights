@@ -92,6 +92,16 @@ impl Scene {
                 .expect("Not using proper version of Sponza scene: Needs a 'Linelight' object."),
         }
     }
+    pub fn dragon_small_light(level: u32) -> Self {
+        let (vertices, indices, light) =
+            Scene::load_gltf_mesh(format!("dragon_small_{level}.glb").as_str());
+        Scene {
+            vertices,
+            indices,
+            light: light
+                .expect("Not using proper version of Sponza scene: Needs a 'Linelight' object."),
+        }
+    }
 
     fn load_gltf_mesh(path: &str) -> (Vec<Vertex>, Vec<u32>, Option<LineSegment>) {
         let (doc, buffers, _) = gltf::import(path).unwrap();
