@@ -74,7 +74,7 @@ pub fn make_ubo_bindings() -> Vec<vk::DescriptorSetLayoutBinding> {
 }
 
 pub fn make_custom_app(
-    shaders: &[vk_engine::shaders::Shader],
+    shaders: &Vec<Vec<shaders::Shader>>,
     debug_shaders: &[vk_engine::shaders::Shader],
     ubo_bindings: &[vk::DescriptorSetLayoutBinding],
     scene: &Scene,
@@ -132,7 +132,7 @@ pub struct LineLightApp {
     pub framebuffers: Vec<vk::Framebuffer>,
     pub command_buffers: Vec<vk::CommandBuffer>,
     pub render_pass: vk::RenderPass,
-    pub graphics_pipeline: vk::Pipeline,
+    pub graphics_pipelines: Vec<vk::Pipeline>,
     pub graphics_pipeline_layout: vk::PipelineLayout,
     pub debug_pipeline: vk::Pipeline,
     pub debug_pipeline_layout: vk::PipelineLayout,
@@ -207,7 +207,7 @@ type UBOType = LineLightUniform;
 impl LineLightApp {
     pub fn new(
         window: winit::window::Window,
-        shaders: &[vk_engine::shaders::Shader],
+        shaders: &Vec<Vec<shaders::Shader>>,
         debug_shaders: &[vk_engine::shaders::Shader],
         vertex_input_descriptors: &vk_engine::VertexInputDescriptors,
         debug_input_descriptors: &vk_engine::VertexInputDescriptors,
@@ -318,15 +318,21 @@ impl LineLightApp {
 
         //// Graphics pipeline
         let render_pass = render_pass(&logical_device, image_format);
-        let (graphics_pipeline, graphics_pipeline_layout, descriptor_set_layout) = main_pipeline(
-            &logical_device,
-            render_pass,
-            swapchain_extent,
-            shaders,
-            vertex_input_descriptors,
-            descriptor_set_bindings,
-            [0.0],
-        );
+        let mut graphics_pipelines = Vec::with_capacity(shaders.len());
+        let (graphics_pipeline_layout, descriptor_set_layout) =
+            pipeline_layouts(&logical_device, descriptor_set_bindings, [0.0]);
+        for shader_group in shaders {
+            let pipeline = main_pipeline(
+                &logical_device,
+                render_pass,
+                swapchain_extent,
+                shader_group,
+                vertex_input_descriptors,
+                graphics_pipeline_layout
+            );
+            graphics_pipelines.push(pipeline);
+        }
+
         let (debug_pipeline, debug_pipeline_layout) = debug_pipeline(
             &logical_device,
             render_pass,
@@ -606,7 +612,7 @@ impl LineLightApp {
             descriptor_sets,
             _descriptor_pool: descriptor_pool,
             framebuffers,
-            graphics_pipeline,
+            graphics_pipelines,
             graphics_pipeline_layout,
             debug_pipeline,
             debug_pipeline_layout,
@@ -822,7 +828,7 @@ impl LineLightApp {
 
     pub fn recreate_swapchain(
         &mut self,
-        shaders: &[shaders::Shader],
+        shaders: &Vec<Vec<shaders::Shader>>,
         debug_shaders: &[shaders::Shader],
         vertex_input_descriptors: &vk_engine::VertexInputDescriptors,
         debug_input_descriptors: &vk_engine::VertexInputDescriptors,
@@ -851,15 +857,20 @@ impl LineLightApp {
             image_format,
         );
         let render_pass = render_pass(&self.logical_device, image_format);
-        let (graphics_pipeline, graphics_pipeline_layout, descriptor_set_layout) = main_pipeline(
-            &self.logical_device,
-            render_pass,
-            swapchain_extent,
-            shaders,
-            vertex_input_descriptors,
-            descriptor_set_bindings,
-            [0.0],
-        );
+        let mut graphics_pipelines = Vec::with_capacity(shaders.len());
+        let (graphics_pipeline_layout, descriptor_set_layout) =
+            pipeline_layouts(&self.logical_device, descriptor_set_bindings, [0.0]);
+        for shader_group in shaders {
+            let pipeline = main_pipeline(
+                &self.logical_device,
+                render_pass,
+                swapchain_extent,
+                shader_group,
+                vertex_input_descriptors,
+                graphics_pipeline_layout
+            );
+            graphics_pipelines.push(pipeline);
+        }
         let (debug_pipeline, debug_pipeline_layout) = debug_pipeline(
             &self.logical_device,
             render_pass,
@@ -894,7 +905,7 @@ impl LineLightApp {
         self.swapchain_extent = swapchain_extent;
         self.image_views = image_views;
         self.render_pass = render_pass;
-        self.graphics_pipeline = graphics_pipeline;
+        self.graphics_pipelines = graphics_pipelines;
         self.graphics_pipeline_layout = graphics_pipeline_layout;
         self.debug_pipeline = debug_pipeline;
         self.debug_pipeline_layout = debug_pipeline_layout;
@@ -902,8 +913,9 @@ impl LineLightApp {
         self.framebuffers = framebuffers;
     }
     unsafe fn clean_swapchain_and_dependants(&mut self) {
-        self.logical_device
-            .destroy_pipeline(self.graphics_pipeline, None);
+        for pipeline in self.graphics_pipelines.iter() {
+            self.logical_device.destroy_pipeline(*pipeline, None);
+        }
         self.logical_device
             .destroy_pipeline_layout(self.graphics_pipeline_layout, None);
         self.logical_device
@@ -1064,9 +1076,8 @@ fn main_pipeline(
     swapchain_extent: vk::Extent2D,
     shaders: &[shaders::Shader],
     vertex_input_descriptors: &vk_engine::VertexInputDescriptors,
-    descriptor_set_bindings: &[vk::DescriptorSetLayoutBinding],
-    push_constants: [f32; 1],
-) -> (vk::Pipeline, vk::PipelineLayout, vk::DescriptorSetLayout) {
+    pipeline_layout: vk::PipelineLayout
+) -> vk::Pipeline {
     // Vertex input settings
     let binding_descriptions = &vertex_input_descriptors.bindings;
     let attribute_descriptions = &vertex_input_descriptors.attributes;
@@ -1118,35 +1129,11 @@ fn main_pipeline(
         .logic_op_enable(false)
         .attachments(&pipeline_color_blend_attachment_states);
 
-    // Descriptor set layout
-    let descriptor_set_layout = {
-        let descriptor_set_layout_info =
-            vk::DescriptorSetLayoutCreateInfo::builder().bindings(descriptor_set_bindings);
-
-        unsafe { logical_device.create_descriptor_set_layout(&descriptor_set_layout_info, None) }
-            .unwrap()
-    };
-
-    // Pipeline layout
-    let push_constant_ranges = [*vk::PushConstantRange::builder()
-        .stage_flags(vk::ShaderStageFlags::VERTEX)
-        .offset(0)
-        .size((push_constants.len() * std::mem::size_of::<f32>()) as u32)];
-
-    let mut pipeline_layout_info =
-        vk::PipelineLayoutCreateInfo::builder().push_constant_ranges(&push_constant_ranges);
-    let pipeline_layout = {
-        let layout = [descriptor_set_layout];
-        pipeline_layout_info = pipeline_layout_info.set_layouts(&layout);
-        unsafe { logical_device.create_pipeline_layout(&pipeline_layout_info, None) }.unwrap()
-    };
-
     let shader_module_vec = shaders
         .iter()
         .map(|shader| create_shader_module(logical_device, shader))
         .collect::<Vec<(vk::ShaderModule, vk::PipelineShaderStageCreateInfo)>>();
     let shader_modules = shader_module_vec.as_slice();
-
     let shader_stages: Vec<vk::PipelineShaderStageCreateInfo> =
         shader_modules.iter().map(|pair| pair.1).collect();
 
@@ -1187,8 +1174,36 @@ fn main_pipeline(
             logical_device.destroy_shader_module(module.0, None)
         }
     }
+    graphics_pipeline
+}
 
-    (graphics_pipeline, pipeline_layout, descriptor_set_layout)
+fn pipeline_layouts(
+    logical_device: &ash::Device,
+    descriptor_set_bindings: &[vk::DescriptorSetLayoutBinding],
+    push_constants: [f32; 1],
+) -> (vk::PipelineLayout, vk::DescriptorSetLayout) {
+    // Descriptor set layout
+    let descriptor_set_layout = {
+        let descriptor_set_layout_info =
+            vk::DescriptorSetLayoutCreateInfo::builder().bindings(descriptor_set_bindings);
+
+        unsafe { logical_device.create_descriptor_set_layout(&descriptor_set_layout_info, None) }
+            .unwrap()
+    };
+    // Pipeline layout
+    let push_constant_ranges = [*vk::PushConstantRange::builder()
+        .stage_flags(vk::ShaderStageFlags::VERTEX)
+        .offset(0)
+        .size((push_constants.len() * std::mem::size_of::<f32>()) as u32)];
+    let mut pipeline_layout_info =
+        vk::PipelineLayoutCreateInfo::builder().push_constant_ranges(&push_constant_ranges);
+    let pipeline_layout = {
+        let layout = [descriptor_set_layout];
+        pipeline_layout_info = pipeline_layout_info.set_layouts(&layout);
+        unsafe { logical_device.create_pipeline_layout(&pipeline_layout_info, None) }.unwrap()
+    };
+
+    (pipeline_layout, descriptor_set_layout)
 }
 
 const DEBUG_SUBPASS_IDX: u32 = 1;

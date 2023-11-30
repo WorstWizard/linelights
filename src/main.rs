@@ -25,7 +25,11 @@ fn main() {
     let _client = tracy_client::Client::start();
     let _span = span!("init");
 
-    let shaders = linelight_vk::make_shaders("simple_shader.vert", "analytic.frag");
+    let analytic_shader = linelight_vk::make_shaders("simple_shader.vert", "analytic.frag");
+    let stochastic_shader = linelight_vk::make_shaders("simple_shader.vert", "stochastic.frag");
+    let debug_shader = linelight_vk::make_shaders("simple_shader.vert", "debug.frag");
+
+    let shaders = vec![analytic_shader, stochastic_shader, debug_shader];
     let debug_shaders = linelight_vk::make_shaders("debugger.vert", "debugger.frag");
     let ubo_bindings = linelight_vk::make_ubo_bindings();
     println!("Loading model...");
@@ -172,7 +176,7 @@ fn main() {
 
                 let cursor_delta = inputs.cursor_delta();
                 if inputs.right_click {
-                    camera.rotate(cursor_delta.y * 0.01, -cursor_delta.x * 0.01,);
+                    camera.rotate(cursor_delta.y * 0.01, -cursor_delta.x * 0.01);
                 }
 
                 mvp.view = Mat4::look_to_rh(camera.eye, camera.direction(), camera.up());
@@ -189,10 +193,21 @@ fn main() {
                 };
                 if inputs.info && !just_printed_info {
                     just_printed_info = true;
-                    println!("Camera:\n\t Position: {}, Direction: {}, Angles: {:?}", camera.eye, camera.direction(), camera.polar_angles());
+                    println!(
+                        "Camera:\n\t Position: {}, Direction: {}, Angles: {:?}",
+                        camera.eye,
+                        camera.direction(),
+                        camera.polar_angles()
+                    );
                 } else if !inputs.info {
                     just_printed_info = false;
                 }
+
+                let selected_shader = if inputs.selected_shader < app.graphics_pipelines.len() {
+                    inputs.selected_shader
+                } else {
+                    0
+                };
 
                 let mut t_stamp = (0, 0);
                 let mut _span;
@@ -218,6 +233,7 @@ fn main() {
                                 app,
                                 current_frame,
                                 img_index,
+                                selected_shader,
                                 scene.indices.len() as u32,
                                 DebugOverlay::num_verts(),
                             );
@@ -228,6 +244,7 @@ fn main() {
                                 app,
                                 current_frame,
                                 img_index,
+                                selected_shader,
                                 scene.indices.len() as u32,
                                 0,
                             );
@@ -333,6 +350,7 @@ fn drawing_commands(
     app: &mut linelight_vk::LineLightApp,
     buffer_index: usize,
     swapchain_image_index: u32,
+    pipeline_index: usize,
     num_indices: u32,
     num_debug_verts: u32,
     // gpu_ctx: Option<&tracy_client::GpuContext>,
@@ -368,7 +386,7 @@ fn drawing_commands(
         app.logical_device.cmd_bind_pipeline(
             app.command_buffers[buffer_index],
             vk::PipelineBindPoint::GRAPHICS,
-            app.graphics_pipeline,
+            app.graphics_pipelines[pipeline_index],
         );
         let vertex_buffers = [app.vertex_buffer.buffer];
         let offsets = [0];

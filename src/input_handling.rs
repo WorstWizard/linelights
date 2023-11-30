@@ -8,6 +8,9 @@ use winit::{
 pub struct Inputs {
     pub cursor_pos: Vec2,
     last_cursor_pos: Vec2,
+
+    pub selected_shader: usize,
+
     pub left_click: bool,
     pub right_click: bool,
 
@@ -50,6 +53,12 @@ impl Inputs {
                     match keycode {
                         VirtualKeyCode::Escape => *control_flow = ControlFlow::Exit,
 
+                        // Shader selection
+                        VirtualKeyCode::Key1 => self.selected_shader = 0,
+                        VirtualKeyCode::Key2 => self.selected_shader = 1,
+                        VirtualKeyCode::Key3 => self.selected_shader = 2,
+
+                        // Misc
                         VirtualKeyCode::P => self.screenshot = pressed,
                         VirtualKeyCode::I => self.info = pressed,
 
