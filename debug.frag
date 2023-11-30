@@ -5,7 +5,7 @@ layout(location = 0) in vec3 inPos;
 layout(location = 1) in vec3 inNormal;
 layout(location = 0) out vec4 outColor;
 
-const int BBOX_COUNT = 4;
+const int BBOX_COUNT = 4*4*4;
 struct AccelStruct {
     vec3 bbox_size;
     vec3 bbox_origins[BBOX_COUNT];
@@ -415,7 +415,7 @@ void main() {
     //     float fraction_of_light = I * (interval.y - interval.x);
     //     irr += sample_line_light_analytic(pos, n, p0, p1, fraction_of_light);
     // }
-    vec3 color = heatmap(touched_triangles / 4000.0 - 1.0);
+    vec3 color = heatmap(touched_triangles / 7800.0 - 1.0);
     // vec3 color = 1.0 - exp(-irr * vec3(1.0) - ambient);
 
     // Fix color banding by adding noise: https://pixelmager.github.io/linelight/banding.html

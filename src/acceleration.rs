@@ -3,10 +3,10 @@ use glam::{vec2, vec3, Vec2, Vec3, Vec3Swizzles};
 use crate::scene_loading::Scene;
 
 // Schwarz 2010
-pub fn tri_aabb_intersect(v0: Vec3, v1: Vec3, v2: Vec3, p: Vec3, d_p: Vec3) -> bool {
-    let precompute = tri_aabb_precompute(v0, v1, v2, d_p);
-    precomputed_tri_aabb_intersect(&precompute, p)
-}
+// pub fn tri_aabb_intersect(v0: Vec3, v1: Vec3, v2: Vec3, p: Vec3, d_p: Vec3) -> bool {
+//     let precompute = tri_aabb_precompute(v0, v1, v2, d_p);
+//     precomputed_tri_aabb_intersect(&precompute, p)
+// }
 
 struct ProjNormalVals {
     n_xy: Vec2,
@@ -141,7 +141,8 @@ pub fn precomputed_tri_aabb_intersect(precompute: &PrecomputedVals, p: Vec3) -> 
     }
 }
 
-const BBOX_COUNT: usize = 4;
+const GRID_SIZE: usize = 4;
+const BBOX_COUNT: usize = GRID_SIZE*GRID_SIZE*GRID_SIZE;
 // const MAX_INDICES: usize = 1 << 24; // With 32 bit indices, this is 2^24 * 4 bytes ~= 67MB, not that bad
 #[derive(Clone)]
 #[repr(C)]
@@ -174,14 +175,17 @@ pub fn build_acceleration_structure(scene: &Scene) -> (AccelStruct, Vec<u32>, (V
         (min - Vec3::splat(0.1), max + Vec3::splat(0.1))
     };
 
-    let bbox_size = vec3(10.0, 7.5, 10.0);
-    let corner_origin = vec3(-10.0, -0.2, -10.0);
-    let origins = vec![
-        corner_origin,
-        corner_origin + Vec3::X * bbox_size.x,
-        corner_origin + Vec3::Z * bbox_size.z,
-        corner_origin + Vec3::X * bbox_size.x + Vec3::Z * bbox_size.z,
-    ];
+    let bbox_size = (scene_aabb.1 - scene_aabb.0)/(GRID_SIZE as f32);
+    let mut origins = Vec::with_capacity(BBOX_COUNT);
+    for i in 0..GRID_SIZE {
+        for j in 0..GRID_SIZE {
+            for k in 0..GRID_SIZE {
+                let ijk = vec3(i as f32, j as f32, k as f32);
+                let bbox_origin = scene_aabb.0 + ijk * bbox_size;
+                origins.push(bbox_origin);
+            }
+        }
+    }
     let bbox_origins: [Vec3; BBOX_COUNT] = origins
         .try_into()
         .expect("Length of bboxes does not match BBOX_COUNT");

@@ -5,7 +5,7 @@ layout(location = 0) in vec3 inPos;
 layout(location = 1) in vec3 inNormal;
 layout(location = 0) out vec4 outColor;
 
-const int BBOX_COUNT = 4;
+const int BBOX_COUNT = 4*4*4;
 struct AccelStruct {
     vec3 bbox_size;
     vec3 bbox_origins[BBOX_COUNT];
