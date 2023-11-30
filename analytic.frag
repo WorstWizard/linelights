@@ -379,9 +379,8 @@ void main() {
     for (int bbox_i=0; bbox_i<BBOX_COUNT; bbox_i++) {
         // If it does, iterate over triangles inside the bounding box
         uint num_bbox_indices = accel_struct.sizes[bbox_i];
-        // if (true) {
-        // if (tri_aabb_intersect(precompute, accel_struct.bbox_origins[bbox_i])) {
-        //     if (early_out) break;
+        if (tri_aabb_intersect(precompute, accel_struct.bbox_origins[bbox_i])) {
+            if (early_out) break;
 
 
             // For each triangle, compute whether it could occlude the linelight, if so, update intervals
@@ -400,7 +399,7 @@ void main() {
             }
 
 
-        // }
+        }
         buffer_offset += int(num_bbox_indices);
     }
     
