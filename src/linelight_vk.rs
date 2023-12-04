@@ -187,7 +187,7 @@ impl Drop for LineLightApp {
             ManuallyDrop::drop(&mut self.depth_image);
 
             self.clean_swapchain_and_dependants();
-
+            
             self.logical_device.destroy_device(None);
             self.surface_loader.destroy_surface(self.surface, None);
 
@@ -694,9 +694,10 @@ impl LineLightApp {
         }
     }
     pub fn present_image(
-        &self,
+        &mut self,
         image_index: u32,
         wait_semaphore: vk::Semaphore,
+        buffer_index: usize
     ) -> Result<bool, vk::Result> {
         let barrier = vk::ImageMemoryBarrier::builder()
             .old_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
@@ -716,25 +717,26 @@ impl LineLightApp {
             .dst_access_mask(vk::AccessFlags::empty());
 
         let src_stage = vk::PipelineStageFlags::TOP_OF_PIPE;
-        let dst_stage = vk::PipelineStageFlags::BOTTOM_OF_PIPE;
+        let dst_stage = vk::PipelineStageFlags::TRANSFER;
+
+        let cmd_buffer = [self.command_buffers[buffer_index]];
 
         unsafe {
-            vk_engine::engine_core::immediate_commands(
-                &self.logical_device,
-                self.command_pool,
-                self.graphics_queue,
-                |cmd_buffer| {
-                    self.logical_device.cmd_pipeline_barrier(
-                        cmd_buffer,
-                        src_stage,
-                        dst_stage,
-                        vk::DependencyFlags::empty(),
-                        &[],
-                        &[],
-                        &[*barrier],
-                    );
-                },
-            );
+            self.logical_device.queue_wait_idle(self.graphics_queue).unwrap();
+            self.record_command_buffer(buffer_index, |app| {
+                app.logical_device.cmd_pipeline_barrier(
+                    cmd_buffer[0],
+                    src_stage,
+                    dst_stage,
+                    vk::DependencyFlags::empty(),
+                    &[],
+                    &[],
+                    &[*barrier],
+                );
+            });
+            let submit_info = vk::SubmitInfo::builder().command_buffers(&cmd_buffer);
+            self.logical_device.queue_submit(self.graphics_queue, &[*submit_info], vk::Fence::null()).unwrap();
+            self.logical_device.queue_wait_idle(self.graphics_queue).unwrap();
         }
 
         let swapchain_arr = [self.swapchain];

@@ -20,6 +20,7 @@ use input_handling::*;
 const SPEED: f32 = 1.0;
 const ENABLE_DEBUG: bool = false;
 
+
 fn main() {
     // Connect to tracy for performance statistics
     let _client = tracy_client::Client::start();
@@ -34,14 +35,14 @@ fn main() {
     let ubo_bindings = linelight_vk::make_ubo_bindings();
     println!("Loading model...");
     // let mut scene = Scene::test_scene_one();
-    // let scene = Scene::test_scene_two();
+    let scene = Scene::test_scene_two();
     // let scene = Scene::sponza(64);
 
     // Stuff for debugging overlay
     // let aabb_center = vec3(0.0, 3.0, 0.0);
     // let aabb = (-Vec3::ONE + aabb_center, Vec3::ONE + aabb_center);
 
-    let scene = Scene::dragon_small_light(32);
+    // let scene = Scene::dragon_small_light(32);
     let (accel_struct, accel_indices, scene_aabb) =
         acceleration::build_acceleration_structure(&scene);
 
@@ -89,20 +90,22 @@ fn main() {
         view: Mat4::IDENTITY,
         projection: Mat4::IDENTITY,
     };
-
+    
     drop(_span);
 
-    app.reset_timestamps(app.command_buffers[0]);
-    let period = app.get_timestamp_period();
-    let timestamp = app.get_timestamp_immediately();
-    let _gpu_ctx = _client
-        .new_gpu_context(
+    #[cfg(feature="gpu_trace")]
+    let _gpu_ctx = {
+        app.reset_timestamps(app.command_buffers[0]);
+        let period = app.get_timestamp_period();
+        let timestamp = app.get_timestamp_immediately();
+        _client.new_gpu_context(
             Some("GPU Context"),
             tracy_client::GpuContextType::Vulkan,
             timestamp,
             period,
         )
-        .unwrap();
+        .unwrap()
+    };
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
@@ -209,7 +212,9 @@ fn main() {
                     0
                 };
 
+                #[cfg(feature="gpu_trace")]
                 let mut t_stamp = (0, 0);
+                #[cfg(feature="gpu_trace")]
                 let mut _span;
                 unsafe {
                     write_struct_to_buffer(
@@ -219,13 +224,16 @@ fn main() {
                         &ubo as *const LineLightUniform,
                     );
 
-                    // Record first timestamp immediately before GPU work
-                    app.reset_timestamps(app.command_buffers[current_frame]);
-                    t_stamp.0 = app.get_timestamp_immediately();
-                    // app.record_immediate_timestamp(app.command_buffers[current_frame], true);
-                    _span = _gpu_ctx
-                        .span_alloc("Drawing", "event_loop", "main.rs", 184)
-                        .unwrap();
+                    #[cfg(feature="gpu_trace")]
+                    {
+                        // Record first timestamp immediately before GPU work
+                        app.reset_timestamps(app.command_buffers[current_frame]);
+                        t_stamp.0 = app.get_timestamp_immediately();
+                        // app.record_immediate_timestamp(app.command_buffers[current_frame], true);
+                        _span = _gpu_ctx
+                            .span_alloc("Drawing", "event_loop", "main.rs", 184)
+                            .unwrap();
+                    }
 
                     if ENABLE_DEBUG {
                         app.record_command_buffer(current_frame, |app| {
@@ -256,9 +264,12 @@ fn main() {
                 app.submit_drawing_command_buffer(current_frame);
 
                 // Record second timestamp immediately after GPU work
-                t_stamp.1 = app.get_timestamp_immediately();
-                _span.end_zone();
-                _span.upload_timestamp(t_stamp.0, t_stamp.1);
+                #[cfg(feature="gpu_trace")]
+                {
+                    t_stamp.1 = app.get_timestamp_immediately();
+                    _span.end_zone();
+                    _span.upload_timestamp(t_stamp.0, t_stamp.1);
+                }
 
                 // After drawing, grab a screenshot if requested
                 if inputs.screenshot && !just_took_screenshot {
@@ -268,7 +279,7 @@ fn main() {
                     just_took_screenshot = false;
                 }
 
-                match app.present_image(img_index, app.sync.render_finished[current_frame]) {
+                match app.present_image(img_index, app.sync.render_finished[current_frame], current_frame) {
                     Ok(true) | Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
                         app.recreate_swapchain(&shaders, &debug_shaders, &vid, &did, &ubo_bindings)
                     }
