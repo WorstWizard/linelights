@@ -11,7 +11,7 @@ pub struct Scene {
 impl Scene {
     pub fn test_scene_one() -> Self {
         let obj = tobj::load_obj(
-            "test.obj",
+            "models/test.obj",
             &tobj::LoadOptions {
                 ignore_lines: false, // Want the line-light
                 ..tobj::GPU_LOAD_OPTIONS
@@ -64,7 +64,7 @@ impl Scene {
     }
 
     pub fn test_scene_two() -> Self {
-        let (vertices, indices, light) = Scene::load_gltf_mesh("better_test_scene.glb");
+        let (vertices, indices, light) = Scene::load_gltf_mesh("models/better_test_scene.glb");
         Scene {
             vertices,
             indices,
@@ -74,7 +74,7 @@ impl Scene {
 
     pub fn sponza(level: u32) -> Self {
         let (vertices, indices, light) =
-            Scene::load_gltf_mesh(format!("sponza_stripped_{level}.glb").as_str());
+            Scene::load_gltf_mesh(format!("models/sponza_stripped_{level}.glb").as_str());
         Scene {
             vertices,
             indices,
@@ -84,7 +84,7 @@ impl Scene {
     }
     pub fn dragon(level: u32) -> Self {
         let (vertices, indices, light) =
-            Scene::load_gltf_mesh(format!("dragon_{level}.glb").as_str());
+            Scene::load_gltf_mesh(format!("models/dragon_{level}.glb").as_str());
         Scene {
             vertices,
             indices,
@@ -94,7 +94,7 @@ impl Scene {
     }
     pub fn dragon_small_light(level: u32) -> Self {
         let (vertices, indices, light) =
-            Scene::load_gltf_mesh(format!("dragon_small_{level}.glb").as_str());
+            Scene::load_gltf_mesh(format!("models/dragon_small_{level}.glb").as_str());
         Scene {
             vertices,
             indices,

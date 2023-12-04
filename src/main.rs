@@ -36,8 +36,8 @@ fn main() {
     
 
     println!("Loading model...");
-    // let scene = Scene::dragon_small_light(32);
-    let scene = Scene::sponza(32);
+    let scene = Scene::dragon_small_light(32);
+    // let scene = Scene::sponza(32);
     let (accel_struct, accel_indices, scene_aabb) =
         acceleration::build_acceleration_structure(&scene);
 
