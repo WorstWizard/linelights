@@ -5,7 +5,7 @@ layout(location = 0) in vec3 inPos;
 layout(location = 1) in vec3 inNormal;
 layout(location = 0) out vec4 outColor;
 
-const int GRID_SIZE = 4;
+const int GRID_SIZE = 10;
 const int BBOX_COUNT = GRID_SIZE*GRID_SIZE*GRID_SIZE;
 struct AccelStruct {
     vec3 bbox_size;

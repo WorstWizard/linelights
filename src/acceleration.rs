@@ -141,7 +141,7 @@ pub fn precomputed_tri_aabb_intersect(precompute: &PrecomputedVals, p: Vec3) -> 
     }
 }
 
-const GRID_SIZE: usize = 4;
+const GRID_SIZE: usize = 10;
 const BBOX_COUNT: usize = GRID_SIZE*GRID_SIZE*GRID_SIZE;
 // const MAX_INDICES: usize = 1 << 24; // With 32 bit indices, this is 2^24 * 4 bytes ~= 67MB, not that bad
 #[derive(Clone)]
@@ -152,6 +152,7 @@ pub struct AccelStruct {
     pub sizes: [u32; BBOX_COUNT], // Number of indices per bbox
 }
 pub fn build_acceleration_structure(scene: &Scene) -> (AccelStruct, Vec<u32>, (Vec3, Vec3)) {
+    println!("# bboxes {BBOX_COUNT}");
     let scene_aabb = {
         let mut min = scene.vertices[0].position;
         let mut max = min;
