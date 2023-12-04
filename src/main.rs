@@ -1,5 +1,6 @@
+use acceleration::{precomputed_tri_aabb_intersect, tri_aabb_precompute, AccelStruct};
 use ash::vk;
-use glam::{vec2, vec3, vec4, Mat4, Vec2, Vec3, Vec3Swizzles, Vec4, Vec4Swizzles};
+use glam::{vec2, vec3, vec4, Mat4, Vec2, Vec3, Vec4, Vec4Swizzles};
 use scene_loading::Scene;
 use vk_engine::engine_core::{self, write_struct_to_buffer};
 use winit::event::{Event, WindowEvent};
@@ -18,7 +19,7 @@ use input_handling::*;
 
 // Some config options
 const SPEED: f32 = 1.0;
-const ENABLE_DEBUG: bool = false;
+const ENABLE_DEBUG: bool = true;
 
 
 fn main() {
@@ -38,10 +39,11 @@ fn main() {
     println!("Loading model...");
     let scene = Scene::dragon_small_light(32);
     // let scene = Scene::sponza(32);
-    let (accel_struct, accel_indices, scene_aabb) =
+    let (accel_struct, accel_indices, _) =
         acceleration::build_acceleration_structure(&scene);
 
-    let mut debug_overlay = DebugOverlay::aabb(scene_aabb.0, scene_aabb.1);
+    let mut debug_overlay = DebugOverlay::default();
+    debug_overlay.light_triangle[0] = scene.light;
 
     let (mut app, event_loop, vid, did) = linelight_vk::make_custom_app(
         &shaders,
@@ -139,6 +141,7 @@ fn main() {
                         &mvp,
                         window_size,
                         &scene,
+                        &accel_struct,
                         &mut debug_overlay,
                     )
                 }
@@ -464,6 +467,7 @@ fn update_debug_overlay(
     mvp: &vk_engine::MVP,
     window_size: Vec2,
     scene: &Scene,
+    accel_struct: &AccelStruct,
     debug_overlay: &mut DebugOverlay,
 ) {
     let normalized_window_coord =
@@ -509,35 +513,56 @@ fn update_debug_overlay(
         // } else {
         //     debug_overlay.tri_e1 = LineSegment(point, l1);
         // }
+        use acceleration::GRID_SIZE;
 
-        let mut int_arr = IntervalArray {
-            size: 0,
-            data: [Vec2::ZERO; ARR_MAX],
-        };
-        add_interval(&mut int_arr, vec2(0.0, 1.0));
+        debug_overlay.light_triangle[1] = LineSegment(l0, point);
+        debug_overlay.light_triangle[2] = LineSegment(l1, point);
+        debug_overlay.boxes = [WireframeBox::default(); MAX_DEBUG_BOXES];
 
-        // let mut occluders = 0;
-        for tri in scene.indices.chunks_exact(3) {
-            if int_arr.size == 0 {
-                break;
-            }
-
-            let v0 = scene.vertices[tri[0] as usize].position;
-            let v1 = scene.vertices[tri[1] as usize].position;
-            let v2 = scene.vertices[tri[2] as usize].position;
-
-            if let Some((interval, _)) = tri_tri_intersect(l0, l1, point, v0, v1, v2) {
-                // println!("occluding interval: {}", interval);
-                occlude_intervals(&mut int_arr, interval);
-                // if occluders < debug_overlay.occluding_tris.len()/3 {
-                //     debug_overlay.occluding_tris[occluders*3] = LineSegment(v0,v1);
-                //     debug_overlay.occluding_tris[occluders*3+1] = LineSegment(v1,v2);
-                //     debug_overlay.occluding_tris[occluders*3+2] = LineSegment(v2,v0);
-                //     debug_overlay.intersections[2*occluders] = line;
-                // }
-                // occluders += 1;
+        let mut hit_boxes = 0;
+        let pc = tri_aabb_precompute(l0, l1, point, accel_struct.bbox_size);
+        for i in 0..GRID_SIZE {
+            for j in 0..GRID_SIZE {
+                for k in 0..GRID_SIZE {
+                    let ijk = vec3(i as f32, j as f32, k as f32);
+                    let bbox_origin = accel_struct.origin + ijk * accel_struct.bbox_size;
+                    if hit_boxes < MAX_DEBUG_BOXES && precomputed_tri_aabb_intersect(&pc, bbox_origin) {
+                        debug_overlay.boxes[hit_boxes] = WireframeBox::aabb(bbox_origin, bbox_origin + accel_struct.bbox_size);
+                        hit_boxes += 1;
+                    }
+                }
             }
         }
+
+
+        // let mut int_arr = IntervalArray {
+        //     size: 0,
+        //     data: [Vec2::ZERO; ARR_MAX],
+        // };
+        // add_interval(&mut int_arr, vec2(0.0, 1.0));
+
+        // // let mut occluders = 0;
+        // for tri in scene.indices.chunks_exact(3) {
+        //     if int_arr.size == 0 {
+        //         break;
+        //     }
+
+        //     let v0 = scene.vertices[tri[0] as usize].position;
+        //     let v1 = scene.vertices[tri[1] as usize].position;
+        //     let v2 = scene.vertices[tri[2] as usize].position;
+
+        //     if let Some((interval, _)) = tri_tri_intersect(l0, l1, point, v0, v1, v2) {
+        //         // println!("occluding interval: {}", interval);
+        //         occlude_intervals(&mut int_arr, interval);
+        //         // if occluders < debug_overlay.occluding_tris.len()/3 {
+        //         //     debug_overlay.occluding_tris[occluders*3] = LineSegment(v0,v1);
+        //         //     debug_overlay.occluding_tris[occluders*3+1] = LineSegment(v1,v2);
+        //         //     debug_overlay.occluding_tris[occluders*3+2] = LineSegment(v2,v0);
+        //         //     debug_overlay.intersections[2*occluders] = line;
+        //         // }
+        //         // occluders += 1;
+        //     }
+        // }
 
         // println!("number of intervals: {}", int_arr.size);
         // println!("intervals: {:?}", int_arr.data.get(0..int_arr.size));
@@ -614,6 +639,8 @@ fn ray_scene_intersect(origin: Vec3, direction: Vec3, scene: &Scene) -> Option<(
     }
     None
 }
+
+/*
 fn sort(a: &mut f32, b: &mut f32) {
     if a > b {
         // println!("swapped {}", a);
@@ -831,3 +858,4 @@ fn occlude_intervals(int_arr: &mut IntervalArray, occ_int: Vec2) {
         i += 1;
     }
 }
+*/

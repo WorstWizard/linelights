@@ -52,14 +52,27 @@ impl Camera {
     }
 }
 
+pub const MAX_DEBUG_BOXES: usize = 32;
 #[repr(C)]
+#[derive(Default)]
 pub struct DebugOverlay {
-    box_lines: [LineSegment; 12],
+    pub light_triangle: [LineSegment; 3],
+    pub boxes: [WireframeBox; MAX_DEBUG_BOXES],
 }
 impl DebugOverlay {
     pub fn num_verts() -> u32 {
         (std::mem::size_of::<DebugOverlay>() / std::mem::size_of::<Vec3>()) as u32
     }
+}
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct LineSegment(pub Vec3, pub Vec3);
+
+#[derive(Clone, Copy, Default)]
+pub struct WireframeBox {
+    _lines: [LineSegment; 12]
+}
+impl WireframeBox {
     pub fn aabb(a: Vec3, b: Vec3) -> Self {
         let d = b - a;
         let mut dx = d;
@@ -72,7 +85,7 @@ impl DebugOverlay {
         dz.x = 0.0;
         dz.y = 0.0;
         Self {
-            box_lines: [
+            _lines: [
                 LineSegment(a, a + dx),
                 LineSegment(a, a + dy),
                 LineSegment(a, a + dz),
@@ -89,6 +102,3 @@ impl DebugOverlay {
         }
     }
 }
-#[repr(C)]
-#[derive(Clone, Copy, Default)]
-pub struct LineSegment(pub Vec3, pub Vec3);
