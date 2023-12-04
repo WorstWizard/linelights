@@ -148,7 +148,7 @@ const BBOX_COUNT: usize = GRID_SIZE*GRID_SIZE*GRID_SIZE;
 #[repr(C)]
 pub struct AccelStruct {
     pub bbox_size: Vec3,
-    pub bbox_origins: [Vec3; BBOX_COUNT],
+    pub origin: Vec3,
     pub sizes: [u32; BBOX_COUNT], // Number of indices per bbox
 }
 pub fn build_acceleration_structure(scene: &Scene) -> (AccelStruct, Vec<u32>, (Vec3, Vec3)) {
@@ -176,19 +176,17 @@ pub fn build_acceleration_structure(scene: &Scene) -> (AccelStruct, Vec<u32>, (V
     };
 
     let bbox_size = (scene_aabb.1 - scene_aabb.0)/(GRID_SIZE as f32);
-    let mut origins = Vec::with_capacity(BBOX_COUNT);
+    let origin = scene_aabb.0;
+    let mut bbox_origins = Vec::with_capacity(BBOX_COUNT);
     for i in 0..GRID_SIZE {
         for j in 0..GRID_SIZE {
             for k in 0..GRID_SIZE {
                 let ijk = vec3(i as f32, j as f32, k as f32);
-                let bbox_origin = scene_aabb.0 + ijk * bbox_size;
-                origins.push(bbox_origin);
+                let bbox_origin = origin + ijk * bbox_size;
+                bbox_origins.push(bbox_origin);
             }
         }
     }
-    let bbox_origins: [Vec3; BBOX_COUNT] = origins
-        .try_into()
-        .expect("Length of bboxes does not match BBOX_COUNT");
 
     // For each triangle in the scene, check which bounding boxes contains the triangle (may be multiple)
     // and fill their corresponding index-lists with the triangle indices
@@ -215,7 +213,7 @@ pub fn build_acceleration_structure(scene: &Scene) -> (AccelStruct, Vec<u32>, (V
     (
         AccelStruct {
             bbox_size,
-            bbox_origins,
+            origin,
             sizes,
         },
         index_arrays.into_iter().flatten().collect(),

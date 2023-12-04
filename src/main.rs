@@ -33,16 +33,10 @@ fn main() {
     let shaders = vec![analytic_shader, stochastic_shader, debug_shader];
     let debug_shaders = linelight_vk::make_shaders("debugger.vert", "debugger.frag");
     let ubo_bindings = linelight_vk::make_ubo_bindings();
+    
+
     println!("Loading model...");
-    // let mut scene = Scene::test_scene_one();
-    let scene = Scene::test_scene_two();
-    // let scene = Scene::sponza(64);
-
-    // Stuff for debugging overlay
-    // let aabb_center = vec3(0.0, 3.0, 0.0);
-    // let aabb = (-Vec3::ONE + aabb_center, Vec3::ONE + aabb_center);
-
-    // let scene = Scene::dragon_small_light(32);
+    let scene = Scene::dragon_small_light(32);
     let (accel_struct, accel_indices, scene_aabb) =
         acceleration::build_acceleration_structure(&scene);
 
