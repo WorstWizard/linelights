@@ -938,6 +938,7 @@ impl LineLightApp {
             .destroy_swapchain(self.swapchain, None);
     }
 
+    #[cfg(feature="gpu_trace")]
     pub fn reset_timestamps(&self, command_buffer: vk::CommandBuffer) {
         let recording_info = vk::CommandBufferBeginInfo::builder()
             .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
@@ -959,6 +960,7 @@ impl LineLightApp {
                 .unwrap();
         }
     }
+    #[cfg(feature="gpu_trace")]
     pub fn get_timestamp_immediately(&self) -> i64 {
         let mut timestamp: [i64; 1] = [0];
         unsafe {
@@ -989,6 +991,7 @@ impl LineLightApp {
 
         timestamp[0]
     }
+    #[cfg(feature="gpu_trace")]
     pub fn get_timestamp_period(&self) -> f32 {
         let (physical_device, _) =
             engine_core::find_physical_device(&self.instance, &self.surface_loader, &self.surface);
