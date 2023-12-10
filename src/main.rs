@@ -19,7 +19,7 @@ use input_handling::*;
 
 // Some config options
 const SPEED: f32 = 1.0;
-const ENABLE_DEBUG: bool = true;
+const ENABLE_DEBUG: bool = false;
 
 
 fn main() {
@@ -116,8 +116,12 @@ fn main() {
                 _ => (),
             },
             Event::MainEventsCleared => {
+                let _whole_span = span!("All frame");
+                let _wait_span = span!("Waiting for fence...");
                 app.wait_for_in_flight_fence(current_frame);
+                drop(_wait_span);
 
+                let _img_index_span = span!("Get image index");
                 let img_index = match app.acquire_next_image(current_frame) {
                     Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
                         app.recreate_swapchain(&shaders, &debug_shaders, &vid, &did, &ubo_bindings);
@@ -126,11 +130,12 @@ fn main() {
                     Ok((i, _)) => i, // Swapchain may be suboptimal, but it's easier to just proceed
                     _ => panic!("Could not acquire image from swapchain"),
                 };
-
                 app.reset_in_flight_fence(current_frame);
+                drop(_img_index_span);
 
                 // Do debug overlay
                 if ENABLE_DEBUG && inputs.left_click {
+                    let _debug_span = span!("Update debug");
                     let cursor_pos = inputs.cursor_pos;
                     let window_size = vec2(
                         app.swapchain_extent.width as f32,
@@ -147,6 +152,7 @@ fn main() {
                     )
                 }
 
+                let _input_update_span = span!("Input update");
                 // Do camera movement
                 let delta_time = timer.elapsed().as_secs_f32();
                 // println!("{}",delta_time*1000.0);
@@ -175,8 +181,12 @@ fn main() {
                 if inputs.move_down {
                     camera.eye += camera.up() * delta_time * SPEED
                 }
-
+                
                 let cursor_delta = inputs.cursor_delta();
+
+                drop(_input_update_span);
+                let _movement_span = span!("Movement update");
+
                 if inputs.right_click {
                     camera.rotate(cursor_delta.y * 0.01, -cursor_delta.x * 0.01);
                 }
@@ -204,6 +214,8 @@ fn main() {
                     just_printed_info = false;
                 }
 
+                drop(_movement_span);
+                
                 let selected_shader = if inputs.selected_shader < app.graphics_pipelines.len() {
                     inputs.selected_shader
                 } else {
@@ -211,16 +223,12 @@ fn main() {
                 };
 
                 #[cfg(feature="gpu_trace")]
+                let _cpu_draw_span = span!("Drawing");
+                #[cfg(feature="gpu_trace")]
                 let mut t_stamp = (0, 0);
                 #[cfg(feature="gpu_trace")]
-                let mut _span;
+                let mut _gpu_span;
                 unsafe {
-                    write_struct_to_buffer(
-                        app.uniform_buffers[current_frame]
-                            .memory_ptr
-                            .expect("Uniform buffer not mapped!"),
-                        &ubo as *const LineLightUniform,
-                    );
 
                     #[cfg(feature="gpu_trace")]
                     {
@@ -228,10 +236,17 @@ fn main() {
                         app.reset_timestamps(app.command_buffers[current_frame]);
                         t_stamp.0 = app.get_timestamp_immediately();
                         // app.record_immediate_timestamp(app.command_buffers[current_frame], true);
-                        _span = _gpu_ctx
+                        _gpu_span = _gpu_ctx
                             .span_alloc("Drawing", "event_loop", "main.rs", 184)
                             .unwrap();
                     }
+
+                    write_struct_to_buffer(
+                        app.uniform_buffers[current_frame]
+                            .memory_ptr
+                            .expect("Uniform buffer not mapped!"),
+                        &ubo as *const LineLightUniform,
+                    );
 
                     if ENABLE_DEBUG {
                         app.record_command_buffer(current_frame, |app| {
@@ -260,13 +275,14 @@ fn main() {
 
                 // Submit commands, begin work
                 app.submit_drawing_command_buffer(current_frame);
-
+                
                 // Record second timestamp immediately after GPU work
                 #[cfg(feature="gpu_trace")]
                 {
                     t_stamp.1 = app.get_timestamp_immediately();
-                    _span.end_zone();
-                    _span.upload_timestamp(t_stamp.0, t_stamp.1);
+                    _gpu_span.end_zone();
+                    _gpu_span.upload_timestamp(t_stamp.0, t_stamp.1);
+                    drop(_cpu_draw_span);
                 }
 
                 // After drawing, grab a screenshot if requested
@@ -276,7 +292,7 @@ fn main() {
                 } else if !inputs.screenshot {
                     just_took_screenshot = false;
                 }
-
+                let _present_span = span!("Presentation");
                 match app.present_image(img_index, app.sync.render_finished[current_frame], current_frame) {
                     Ok(true) | Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
                         app.recreate_swapchain(&shaders, &debug_shaders, &vid, &did, &ubo_bindings)
