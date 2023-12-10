@@ -6,7 +6,7 @@ pub struct LineLightUniform {
     pub mvp: vk_engine::MVP,
     pub l0: glam::Vec4,
     pub l1: glam::Vec4,
-    pub accel_struct: crate::acceleration::AccelStruct,
+    pub accel_struct: crate::acceleration::TLAS,
 }
 
 #[repr(C)]

@@ -5,12 +5,20 @@ layout(location = 0) in vec3 inPos;
 layout(location = 1) in vec3 inNormal;
 layout(location = 0) out vec4 outColor;
 
-const int GRID_SIZE = 10;
+const int GRID_SIZE = 4;
 const int BBOX_COUNT = GRID_SIZE*GRID_SIZE*GRID_SIZE;
-struct AccelStruct {
-    vec3 bbox_size;
-    vec3 bbox_origin;
-    uint sizes[BBOX_COUNT];
+
+struct BufferView {
+    int offset;
+    int size;
+};
+struct BLAS {
+    BufferView buffer_views[BBOX_COUNT];
+};
+struct TLAS {
+    vec3 size;
+    vec3 origin;
+    BLAS subgrids[BBOX_COUNT];
 };
 
 layout(scalar, binding = 0) uniform UBO {
@@ -19,7 +27,7 @@ layout(scalar, binding = 0) uniform UBO {
     mat4 proj;
     vec4 l0_ubo;
     vec4 l1_ubo;
-    AccelStruct accel_struct;
+    TLAS accel_struct;
 };
 
 struct Vertex {
@@ -355,6 +363,19 @@ bool tri_aabb_intersect(PrecomputeVals pc, vec3 bbox_pos) {
            projected_normal_check(pc.pn_2, bbox_pos);
 }
 
+// struct BufferView {
+//     int offset;
+//     int size;
+// };
+// struct BLAS {
+//     BufferView buffer_views[BBOX_COUNT];
+// };
+// struct TLAS {
+//     vec3 size;
+//     vec3 origin;
+//     BLAS subgrids[BBOX_COUNT];
+// };
+
 void main() {
     float I = 5.0;
     vec3 ambient = vec3(0.1);
@@ -367,7 +388,10 @@ void main() {
     vec3 L = l1 - l0;
 
     // Precompute AABB grid intermediate values for fast intersection
-    PrecomputeVals precompute = tri_aabb_precompute(l0_ubo.xyz, l1_ubo.xyz, inPos, accel_struct.bbox_size);
+    vec3 blas_size = accel_struct.size / float(GRID_SIZE);
+    vec3 bbox_size = blas_size / float(GRID_SIZE);
+    PrecomputeVals blas_precompute = tri_aabb_precompute(l0_ubo.xyz, l1_ubo.xyz, inPos, blas_size);
+    PrecomputeVals bbox_precompute = tri_aabb_precompute(l0_ubo.xyz, l1_ubo.xyz, inPos, bbox_size);
 
     // Initialize interval array
     IntervalArray int_arr;
@@ -375,23 +399,32 @@ void main() {
     add_interval(int_arr, vec2(0.0,1.0));
 
     // For each bounding box, test first if it intersects the light-triangle at all
-    int buffer_offset = 0;
-    bool early_out = false;
-    for (int bbox_i=0; bbox_i<GRID_SIZE; bbox_i++) {
-        for (int bbox_j=0; bbox_j<GRID_SIZE; bbox_j++) {
+    // bool early_out = false;
+    int blas_index = 0;
+    for (int blas_i=0; blas_i<GRID_SIZE; blas_i++) {
+    for (int blas_j=0; blas_j<GRID_SIZE; blas_j++) {
+    for (int blas_k=0; blas_k<GRID_SIZE; blas_k++) {
+        vec3 ijk = vec3(blas_i, blas_j, blas_k);
+        vec3 blas_origin = accel_struct.origin + ijk * blas_size;
+
+        if (tri_aabb_intersect(blas_precompute, blas_origin)) {
+            // if (early_out) break;
+
+            int bbox_index = 0;
+            for (int bbox_i=0; bbox_i<GRID_SIZE; bbox_i++) {
+            for (int bbox_j=0; bbox_j<GRID_SIZE; bbox_j++) {
             for (int bbox_k=0; bbox_k<GRID_SIZE; bbox_k++) {
                 vec3 ijk = vec3(bbox_i, bbox_j, bbox_k);
-                vec3 bbox_origin = accel_struct.bbox_origin + ijk * accel_struct.bbox_size;
-                uint num_bbox_indices = accel_struct.sizes[bbox_i * GRID_SIZE * GRID_SIZE + bbox_j * GRID_SIZE + bbox_k];
+                vec3 bbox_origin = blas_origin + ijk * bbox_size;
 
-                // If it does, iterate over triangles inside the bounding box
-                if (tri_aabb_intersect(precompute, bbox_origin)) {
-                    if (early_out) break;
+                if (tri_aabb_intersect(bbox_precompute, bbox_origin)) {
 
+                    BufferView buffer_view = accel_struct.subgrids[blas_index].buffer_views[bbox_index];
+                    
                     // For each triangle, compute whether it could occlude the linelight, if so, update intervals
-                    for (int i = buffer_offset; i < buffer_offset+num_bbox_indices; i += 3) {
-                        if (int_arr.size == 0) early_out = true; // Early stop
-                        if (early_out) break;
+                    for (int i = buffer_view.offset; i < buffer_view.offset+buffer_view.size; i += 3) {
+                        // if (int_arr.size == 0) early_out = true; // Early stop
+                        // if (early_out) break;
 
                         vec3 v0 = to_world(verts[acceleration_indices[i]].pos);
                         vec3 v1 = to_world(verts[acceleration_indices[i+1]].pos);
@@ -402,14 +435,13 @@ void main() {
                             occlude_intervals(int_arr, interval);
                         }
                     }
-
                 }
-                buffer_offset += int(num_bbox_indices);
-            }
-        }
-    }
-    
 
+                bbox_index++;
+            }}}
+        }
+        blas_index++;
+    }}}
 
     float irr = 0.0;
     for (int i = 0; i < int_arr.size; i++) {

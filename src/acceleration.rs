@@ -1,12 +1,12 @@
 use glam::{vec2, vec3, Vec2, Vec3, Vec3Swizzles};
 
-use crate::scene_loading::Scene;
+use crate::{scene_loading::Scene, datatypes::Vertex};
 
 // Schwarz 2010
-// pub fn tri_aabb_intersect(v0: Vec3, v1: Vec3, v2: Vec3, p: Vec3, d_p: Vec3) -> bool {
-//     let precompute = tri_aabb_precompute(v0, v1, v2, d_p);
-//     precomputed_tri_aabb_intersect(&precompute, p)
-// }
+pub fn tri_aabb_intersect(v0: Vec3, v1: Vec3, v2: Vec3, p: Vec3, d_p: Vec3) -> bool {
+    let precompute = tri_aabb_precompute(v0, v1, v2, d_p);
+    precomputed_tri_aabb_intersect(&precompute, p)
+}
 
 struct ProjNormalVals {
     n_xy: Vec2,
@@ -141,18 +141,28 @@ pub fn precomputed_tri_aabb_intersect(precompute: &PrecomputedVals, p: Vec3) -> 
     }
 }
 
-pub const GRID_SIZE: usize = 10;
+pub const GRID_SIZE: usize = 4;
 pub const BBOX_COUNT: usize = GRID_SIZE*GRID_SIZE*GRID_SIZE;
-// const MAX_INDICES: usize = 1 << 24; // With 32 bit indices, this is 2^24 * 4 bytes ~= 67MB, not that bad
-#[derive(Clone)]
 #[repr(C)]
-pub struct AccelStruct {
-    pub bbox_size: Vec3,
-    pub origin: Vec3,
-    pub sizes: [u32; BBOX_COUNT], // Number of indices per bbox
+#[derive(Clone, Copy, Default, Debug)]
+pub struct BufferView {
+    pub offset: i32,
+    pub size: i32,
 }
-pub fn build_acceleration_structure(scene: &Scene) -> (AccelStruct, Vec<u32>, (Vec3, Vec3)) {
-    println!("# bboxes {BBOX_COUNT}");
+#[derive(Clone, Debug)]
+#[repr(C)]
+pub struct BLAS {
+    buffer_views: [BufferView; BBOX_COUNT],
+}
+#[repr(C)]
+pub struct TLAS {
+    size: Vec3,
+    origin: Vec3,
+    subgrids: [BLAS; BBOX_COUNT]
+}
+
+pub fn build_acceleration_structure(scene: &Scene) -> (TLAS, Vec<u32>) {
+    println!("Building acceleration structure...");
     let scene_aabb = {
         let mut min = scene.vertices[0].position;
         let mut max = min;
@@ -176,48 +186,123 @@ pub fn build_acceleration_structure(scene: &Scene) -> (AccelStruct, Vec<u32>, (V
         (min - Vec3::splat(0.1), max + Vec3::splat(0.1))
     };
 
-    let bbox_size = (scene_aabb.1 - scene_aabb.0)/(GRID_SIZE as f32);
+    let size = scene_aabb.1 - scene_aabb.0;
     let origin = scene_aabb.0;
-    let mut bbox_origins = Vec::with_capacity(BBOX_COUNT);
+    let mut subgrids: Vec<BLAS> = Vec::with_capacity(BBOX_COUNT);
+    let mut index_buffer = Vec::new();
+
+    // Construct grid of BLAS's
+    let blas_size = size/(GRID_SIZE as f32);
+    for i in 0..GRID_SIZE {
+        for j in 0..GRID_SIZE {
+            for k in 0..GRID_SIZE {
+                let ijk = vec3(i as f32, j as f32, k as f32);
+                let blas_origin = origin + ijk * blas_size;
+                subgrids.push(build_blas(&scene, &mut index_buffer, blas_origin, blas_size));
+            }
+        }
+    }
+
+    (TLAS { size, origin, subgrids: subgrids.try_into().unwrap() }, index_buffer)
+}
+
+fn build_blas(scene: &Scene, index_buffer: &mut Vec<u32>, origin: Vec3, size: Vec3) -> BLAS {
+    let bbox_size = size/(GRID_SIZE as f32);
+    let mut buffer_views = Vec::with_capacity(BBOX_COUNT);
     for i in 0..GRID_SIZE {
         for j in 0..GRID_SIZE {
             for k in 0..GRID_SIZE {
                 let ijk = vec3(i as f32, j as f32, k as f32);
                 let bbox_origin = origin + ijk * bbox_size;
-                bbox_origins.push(bbox_origin);
+                let length_before = index_buffer.len();
+                
+                for tri_indices in scene.indices.chunks_exact(3) {
+                    let v0 = scene.vertices[tri_indices[0] as usize].position;
+                    let v1 = scene.vertices[tri_indices[1] as usize].position;
+                    let v2 = scene.vertices[tri_indices[2] as usize].position;
+            
+                    if tri_aabb_intersect(v0, v1, v2, bbox_origin, bbox_size) {
+                        index_buffer.extend(tri_indices);
+                    }
+                }
+                let length_after = index_buffer.len();
+                buffer_views.push(
+                    BufferView { offset: length_before as i32, size: (length_after-length_before) as i32 }
+                )
             }
         }
     }
-
-    // For each triangle in the scene, check which bounding boxes contains the triangle (may be multiple)
-    // and fill their corresponding index-lists with the triangle indices
-    let mut index_arrays = vec![Vec::new(); BBOX_COUNT];
-    for tri_indices in scene.indices.chunks_exact(3) {
-        let v0 = scene.vertices[tri_indices[0] as usize].position;
-        let v1 = scene.vertices[tri_indices[1] as usize].position;
-        let v2 = scene.vertices[tri_indices[2] as usize].position;
-
-        let precompute = tri_aabb_precompute(v0, v1, v2, bbox_size);
-        for (bbox_i, bbox_pos) in bbox_origins.iter().enumerate() {
-            if precomputed_tri_aabb_intersect(&precompute, *bbox_pos) {
-                index_arrays[bbox_i].extend_from_slice(tri_indices);
-            }
-        }
-    }
-    let sizes = index_arrays
-        .iter()
-        .map(|list| list.len() as u32)
-        .collect::<Vec<u32>>()
-        .try_into()
-        .unwrap();
-
-    (
-        AccelStruct {
-            bbox_size,
-            origin,
-            sizes,
-        },
-        index_arrays.into_iter().flatten().collect(),
-        scene_aabb,
-    )
+    BLAS { buffer_views: buffer_views.try_into().unwrap() }
 }
+
+
+// pub fn build_acceleration_structure(scene: &Scene) -> (AccelStruct, Vec<u32>, (Vec3, Vec3)) {
+//     println!("# bboxes {BBOX_COUNT}");
+//     let scene_aabb = {
+//         let mut min = scene.vertices[0].position;
+//         let mut max = min;
+//         for pos in scene.vertices.iter().map(|v| v.position) {
+//             if pos.x < min.x {
+//                 min.x = pos.x
+//             } else if pos.x > max.x {
+//                 max.x = pos.x
+//             }
+//             if pos.y < min.y {
+//                 min.y = pos.y
+//             } else if pos.y > max.y {
+//                 max.y = pos.y
+//             }
+//             if pos.z < min.z {
+//                 min.z = pos.z
+//             } else if pos.z > max.z {
+//                 max.z = pos.z
+//             }
+//         }
+//         (min - Vec3::splat(0.1), max + Vec3::splat(0.1))
+//     };
+
+//     let bbox_size = (scene_aabb.1 - scene_aabb.0)/(GRID_SIZE as f32);
+//     let origin = scene_aabb.0;
+//     let mut bbox_origins = Vec::with_capacity(BBOX_COUNT);
+//     for i in 0..GRID_SIZE {
+//         for j in 0..GRID_SIZE {
+//             for k in 0..GRID_SIZE {
+//                 let ijk = vec3(i as f32, j as f32, k as f32);
+//                 let bbox_origin = origin + ijk * bbox_size;
+//                 bbox_origins.push(bbox_origin);
+//             }
+//         }
+//     }
+
+//     // For each triangle in the scene, check which bounding boxes contains the triangle (may be multiple)
+//     // and fill their corresponding index-lists with the triangle indices
+//     let mut index_arrays = vec![Vec::new(); BBOX_COUNT];
+//     for tri_indices in scene.indices.chunks_exact(3) {
+//         let v0 = scene.vertices[tri_indices[0] as usize].position;
+//         let v1 = scene.vertices[tri_indices[1] as usize].position;
+//         let v2 = scene.vertices[tri_indices[2] as usize].position;
+
+//         let precompute = tri_aabb_precompute(v0, v1, v2, bbox_size);
+//         for (bbox_i, bbox_pos) in bbox_origins.iter().enumerate() {
+//             if precomputed_tri_aabb_intersect(&precompute, *bbox_pos) {
+//                 index_arrays[bbox_i].extend_from_slice(tri_indices);
+//             }
+//         }
+//     }
+//     let sizes = index_arrays
+//         .iter()
+//         .map(|list| list.len() as u32)
+//         .collect::<Vec<u32>>()
+//         .try_into()
+//         .unwrap();
+
+//     (
+//         AccelStruct {
+//             bbox_size,
+//             origin,
+//             sizes,
+//         },
+//         index_arrays.into_iter().flatten().collect(),
+//         scene_aabb,
+//     )
+// }
