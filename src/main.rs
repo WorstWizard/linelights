@@ -50,6 +50,7 @@ fn main() {
         &debug_shaders,
         &ubo_bindings,
         &scene,
+        &accel_struct,
         &accel_indices,
     );
 
@@ -187,7 +188,6 @@ fn main() {
                 mvp.projection =
                     Mat4::perspective_infinite_rh(f32::to_radians(90.0), aspect_ratio, 0.01);
                 let ubo = LineLightUniform {
-                    accel_struct: accel_struct.clone(),
                     l0: Vec4::from((scene.light.0, 1.0)),
                     l1: Vec4::from((scene.light.1, 1.0)),
                     mvp: mvp.clone(),
