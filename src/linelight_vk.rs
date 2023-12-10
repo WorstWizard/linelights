@@ -745,47 +745,47 @@ impl LineLightApp {
         &mut self,
         image_index: u32,
         wait_semaphore: vk::Semaphore,
-        buffer_index: usize
+        // buffer_index: usize
     ) -> Result<bool, vk::Result> {
-        let barrier = vk::ImageMemoryBarrier::builder()
-            .old_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
-            .new_layout(vk::ImageLayout::PRESENT_SRC_KHR)
-            .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-            .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-            .image(self.swapchain_images[image_index as usize])
-            .subresource_range(
-                *vk::ImageSubresourceRange::builder()
-                    .aspect_mask(vk::ImageAspectFlags::COLOR)
-                    .base_mip_level(0)
-                    .level_count(1)
-                    .base_array_layer(0)
-                    .layer_count(1),
-            )
-            .src_access_mask(vk::AccessFlags::empty())
-            .dst_access_mask(vk::AccessFlags::empty());
+        // let barrier = vk::ImageMemoryBarrier::builder()
+        //     .old_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+        //     .new_layout(vk::ImageLayout::PRESENT_SRC_KHR)
+        //     .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+        //     .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+        //     .image(self.swapchain_images[image_index as usize])
+        //     .subresource_range(
+        //         *vk::ImageSubresourceRange::builder()
+        //             .aspect_mask(vk::ImageAspectFlags::COLOR)
+        //             .base_mip_level(0)
+        //             .level_count(1)
+        //             .base_array_layer(0)
+        //             .layer_count(1),
+        //     )
+        //     .src_access_mask(vk::AccessFlags::empty())
+        //     .dst_access_mask(vk::AccessFlags::empty());
 
-        let src_stage = vk::PipelineStageFlags::TOP_OF_PIPE;
-        let dst_stage = vk::PipelineStageFlags::TRANSFER;
+        // let src_stage = vk::PipelineStageFlags::TOP_OF_PIPE;
+        // let dst_stage = vk::PipelineStageFlags::TRANSFER;
 
-        let cmd_buffer = [self.command_buffers[buffer_index]];
+        // let cmd_buffer = [self.command_buffers[buffer_index]];
 
-        unsafe {
-            self.logical_device.queue_wait_idle(self.graphics_queue).unwrap();
-            self.record_command_buffer(buffer_index, |app| {
-                app.logical_device.cmd_pipeline_barrier(
-                    cmd_buffer[0],
-                    src_stage,
-                    dst_stage,
-                    vk::DependencyFlags::empty(),
-                    &[],
-                    &[],
-                    &[*barrier],
-                );
-            });
-            let submit_info = vk::SubmitInfo::builder().command_buffers(&cmd_buffer);
-            self.logical_device.queue_submit(self.graphics_queue, &[*submit_info], vk::Fence::null()).unwrap();
-            self.logical_device.queue_wait_idle(self.graphics_queue).unwrap();
-        }
+        // unsafe {
+        //     self.logical_device.queue_wait_idle(self.graphics_queue).unwrap();
+        //     self.record_command_buffer(buffer_index, |app| {
+        //         app.logical_device.cmd_pipeline_barrier(
+        //             cmd_buffer[0],
+        //             src_stage,
+        //             dst_stage,
+        //             vk::DependencyFlags::empty(),
+        //             &[],
+        //             &[],
+        //             &[*barrier],
+        //         );
+        //     });
+        //     let submit_info = vk::SubmitInfo::builder().command_buffers(&cmd_buffer);
+        //     self.logical_device.queue_submit(self.graphics_queue, &[*submit_info], vk::Fence::null()).unwrap();
+        //     self.logical_device.queue_wait_idle(self.graphics_queue).unwrap();
+        // }
 
         let swapchain_arr = [self.swapchain];
         let image_index_arr = [image_index];
@@ -1073,7 +1073,7 @@ fn render_pass(logical_device: &ash::Device, image_format: vk::Format) -> vk::Re
         .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
         .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
         .initial_layout(vk::ImageLayout::UNDEFINED)
-        .final_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)];
+        .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)];
     let depth_attachments = [*vk::AttachmentDescription::builder()
         .format(vk::Format::D32_SFLOAT)
         .samples(vk::SampleCountFlags::TYPE_1)

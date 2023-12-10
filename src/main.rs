@@ -293,7 +293,7 @@ fn main() {
                     just_took_screenshot = false;
                 }
                 let _present_span = span!("Presentation");
-                match app.present_image(img_index, app.sync.render_finished[current_frame], current_frame) {
+                match app.present_image(img_index, app.sync.render_finished[current_frame]) {
                     Ok(true) | Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
                         app.recreate_swapchain(&shaders, &debug_shaders, &vid, &did, &ubo_bindings)
                     }
@@ -338,7 +338,7 @@ fn take_screenshot(app: &linelight_vk::LineLightApp, img_index: u32) {
                 app.logical_device.cmd_copy_image_to_buffer(
                     buf,
                     app.swapchain_images[img_index as usize],
-                    vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                    vk::ImageLayout::PRESENT_SRC_KHR,
                     screenshot_buffer.buffer,
                     &[*buf_copy],
                 );
