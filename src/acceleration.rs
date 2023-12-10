@@ -163,7 +163,10 @@ pub struct TLAS {
 }
 
 pub fn build_acceleration_structure(scene: &Scene) -> (TLAS, Vec<u32>) {
-    println!("Building acceleration structure...");
+    use std::{time::Instant, io::{stdout, Write}};
+    print!("Building acceleration structure...");
+    stdout().flush().unwrap();
+
     let scene_aabb = {
         let mut min = scene.vertices[0].position;
         let mut max = min;
@@ -191,18 +194,25 @@ pub fn build_acceleration_structure(scene: &Scene) -> (TLAS, Vec<u32>) {
     let origin = scene_aabb.0;
     let mut subgrids: Vec<BLAS> = Vec::with_capacity(BBOX_COUNT);
     let mut index_buffer = Vec::new();
-
+    
     // Construct grid of BLAS's
+    let mut timer = Instant::now();
     let blas_size = size/(GRID_SIZE as f32);
     for i in 0..GRID_SIZE {
         for j in 0..GRID_SIZE {
             for k in 0..GRID_SIZE {
+                if timer.elapsed().as_secs_f32() > 1.0 {
+                    print!(" {}/{}...", subgrids.len(), BBOX_COUNT);
+                    stdout().flush().unwrap();
+                    timer = Instant::now()
+                }
                 let ijk = vec3(i as f32, j as f32, k as f32);
                 let blas_origin = origin + ijk * blas_size;
                 subgrids.push(build_blas(&scene, &mut index_buffer, blas_origin, blas_size));
             }
         }
     }
+    println!();
 
     (TLAS { size, origin, subgrids: subgrids.try_into().unwrap() }, index_buffer)
 }
