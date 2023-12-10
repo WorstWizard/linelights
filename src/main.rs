@@ -50,6 +50,7 @@ fn main() {
         &debug_shaders,
         &ubo_bindings,
         &scene,
+        &accel_struct,
         &accel_indices,
     );
 
@@ -102,13 +103,6 @@ fn main() {
             period,
         )
         .unwrap()
-    };
-
-    let mut ubo = LineLightUniform {
-        accel_struct,
-        mvp: mvp.clone(),
-        l0: Vec4::from((scene.light.0, 1.0)),
-        l1: Vec4::from((scene.light.1, 1.0))
     };
 
     event_loop.run(move |event, _, control_flow| {
@@ -193,13 +187,11 @@ fn main() {
                     app.swapchain_extent.width as f32 / app.swapchain_extent.height as f32;
                 mvp.projection =
                     Mat4::perspective_infinite_rh(f32::to_radians(90.0), aspect_ratio, 0.01);
-                // let ubo = LineLightUniform {
-                //     accel_struct,
-                //     l0: Vec4::from((scene.light.0, 1.0)),
-                //     l1: Vec4::from((scene.light.1, 1.0)),
-                //     mvp: mvp.clone(),
-                // };
-                ubo.mvp = mvp.clone();
+                let ubo = LineLightUniform {
+                    l0: Vec4::from((scene.light.0, 1.0)),
+                    l1: Vec4::from((scene.light.1, 1.0)),
+                    mvp: mvp.clone(),
+                };
                 if inputs.info && !just_printed_info {
                     just_printed_info = true;
                     println!(
@@ -475,7 +467,7 @@ fn drawing_commands(
 //     mvp: &vk_engine::MVP,
 //     window_size: Vec2,
 //     scene: &Scene,
-//     accel_struct: &acceleration::TLAS,
+//     accel_struct: &acceleration::AccelStruct,
 //     debug_overlay: &mut DebugOverlay,
 // ) {
 //     let normalized_window_coord =

@@ -1,6 +1,6 @@
 use glam::{vec2, vec3, Vec2, Vec3, Vec3Swizzles};
 
-use crate::{scene_loading::Scene, datatypes::Vertex};
+use crate::scene_loading::Scene;
 
 // Schwarz 2010
 pub fn tri_aabb_intersect(v0: Vec3, v1: Vec3, v2: Vec3, p: Vec3, d_p: Vec3) -> bool {
@@ -141,6 +141,7 @@ pub fn precomputed_tri_aabb_intersect(precompute: &PrecomputedVals, p: Vec3) -> 
     }
 }
 
+pub type AccelStruct = TLAS;
 pub const GRID_SIZE: usize = 4;
 pub const BBOX_COUNT: usize = GRID_SIZE*GRID_SIZE*GRID_SIZE;
 #[repr(C)]

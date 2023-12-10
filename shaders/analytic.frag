@@ -27,6 +27,8 @@ layout(scalar, binding = 0) uniform UBO {
     mat4 proj;
     vec4 l0_ubo;
     vec4 l1_ubo;
+};
+layout(scalar, binding = 1) uniform accelerationStructure {
     TLAS accel_struct;
 };
 
@@ -34,6 +36,7 @@ struct Vertex {
     vec3 pos;
     vec3 normal;
 };
+
 layout(scalar, binding = 2) readonly buffer vertexBuffer {
     Vertex verts[];
 };
