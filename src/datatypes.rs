@@ -51,14 +51,20 @@ impl Camera {
     }
 }
 
-pub const MAX_DEBUG_BOXES: usize = 32;
+use crate::acceleration::BBOX_COUNT;
+pub const MAX_DEBUG_BOXES: usize = BBOX_COUNT*BBOX_COUNT;
 #[repr(C)]
-#[derive(Default)]
 pub struct DebugOverlay {
     pub light_triangle: [LineSegment; 3],
     pub boxes: [WireframeBox; MAX_DEBUG_BOXES],
 }
 impl DebugOverlay {
+    pub fn new() -> Self {
+        DebugOverlay {
+            light_triangle: [LineSegment::default(); 3],
+            boxes: [WireframeBox::default(); MAX_DEBUG_BOXES]
+        }
+    }
     pub fn num_verts() -> u32 {
         (std::mem::size_of::<DebugOverlay>() / std::mem::size_of::<Vec3>()) as u32
     }

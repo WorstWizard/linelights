@@ -546,7 +546,7 @@ impl LineLightApp {
         );
 
         // Debug vertex buffers
-        const DEBUG_BUFFER_SIZE: u64 = 1<<16;
+        const DEBUG_BUFFER_SIZE: u64 = 1<<22; // Should be large enough to contain *anything* I want to draw
         let mut debug_buffer = {
             let buffer = engine_core::buffer::create_buffer(
                 &logical_device,

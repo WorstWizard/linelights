@@ -157,8 +157,8 @@ pub struct BLAS {
 }
 #[repr(C)]
 pub struct TLAS {
-    size: Vec3,
-    origin: Vec3,
+    pub size: Vec3,
+    pub origin: Vec3,
     subgrids: [BLAS; BBOX_COUNT]
 }
 

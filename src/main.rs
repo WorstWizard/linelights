@@ -1,6 +1,6 @@
 use acceleration::{precomputed_tri_aabb_intersect, tri_aabb_precompute};
 use ash::vk;
-use glam::{vec2, vec3, vec4, Mat4, Vec2, Vec3, Vec4, Vec4Swizzles, Vec3Swizzles};
+use glam::{vec2, vec3, vec4, Mat4, Vec2, Vec3, Vec4, Vec4Swizzles};
 use scene_loading::Scene;
 use vk_engine::engine_core::{self, write_struct_to_buffer};
 use winit::event::{Event, WindowEvent};
@@ -42,7 +42,7 @@ fn main() {
     let (accel_struct, accel_indices) =
         acceleration::build_acceleration_structure(&scene);
 
-    let mut debug_overlay = DebugOverlay::default();
+    let mut debug_overlay = Box::new(DebugOverlay::new());
     debug_overlay.light_triangle[0] = scene.light;
 
     let (mut app, event_loop, vid, did) = linelight_vk::make_custom_app(
@@ -62,7 +62,7 @@ fn main() {
             app.debug_buffer
                 .memory_ptr
                 .expect("Uniform buffer not mapped!"),
-            &debug_overlay as *const DebugOverlay,
+            debug_overlay.as_ref() as *const DebugOverlay,
         );
     }
 
@@ -130,22 +130,22 @@ fn main() {
                 app.reset_in_flight_fence(current_frame);
 
                 // Do debug overlay
-                // if ENABLE_DEBUG && inputs.left_click {
-                //     let cursor_pos = inputs.cursor_pos;
-                //     let window_size = vec2(
-                //         app.swapchain_extent.width as f32,
-                //         app.swapchain_extent.height as f32,
-                //     );
-                //     update_debug_overlay(
-                //         cursor_pos,
-                //         &mut app,
-                //         &mvp,
-                //         window_size,
-                //         &scene,
-                //         &accel_struct,
-                //         &mut debug_overlay,
-                //     )
-                // }
+                if ENABLE_DEBUG && inputs.left_click {
+                    let cursor_pos = inputs.cursor_pos;
+                    let window_size = vec2(
+                        app.swapchain_extent.width as f32,
+                        app.swapchain_extent.height as f32,
+                    );
+                    update_debug_overlay(
+                        cursor_pos,
+                        &mut app,
+                        &mvp,
+                        window_size,
+                        &scene,
+                        &accel_struct,
+                        &mut debug_overlay,
+                    )
+                }
 
                 // Do camera movement
                 let delta_time = timer.elapsed().as_secs_f32();
@@ -461,129 +461,144 @@ fn drawing_commands(
     }
 }
 
-// fn update_debug_overlay(
-//     clicked_pos: Vec2,
-//     app: &mut linelight_vk::LineLightApp,
-//     mvp: &vk_engine::MVP,
-//     window_size: Vec2,
-//     scene: &Scene,
-//     accel_struct: &acceleration::AccelStruct,
-//     debug_overlay: &mut DebugOverlay,
-// ) {
-//     let normalized_window_coord =
-//         2.0 * clicked_pos * vec2(1.0 / window_size.x, 1.0 / window_size.y) - vec2(1.0, 1.0);
-//     let inverse_mat = (mvp.projection.mul_mat4(&mvp.view.mul_mat4(&mvp.model))).inverse();
-//     let mut point_in_scene_space_0 = inverse_mat.mul_vec4(vec4(
-//         normalized_window_coord.x,
-//         normalized_window_coord.y,
-//         0.0,
-//         1.0,
-//     ));
-//     point_in_scene_space_0 *= Vec4::splat(1.0 / point_in_scene_space_0.w);
-//     let mut point_in_scene_space_1 = inverse_mat.mul_vec4(vec4(
-//         normalized_window_coord.x,
-//         normalized_window_coord.y,
-//         0.5,
-//         1.0,
-//     ));
-//     point_in_scene_space_1 *= Vec4::splat(1.0 / point_in_scene_space_1.w);
-//     let dir = (point_in_scene_space_1 - point_in_scene_space_0)
-//         .xyz()
-//         .normalize();
+fn update_debug_overlay(
+    clicked_pos: Vec2,
+    app: &mut linelight_vk::LineLightApp,
+    mvp: &vk_engine::MVP,
+    window_size: Vec2,
+    scene: &Scene,
+    accel_struct: &acceleration::AccelStruct,
+    debug_overlay: &mut DebugOverlay,
+) {
+    let normalized_window_coord =
+        2.0 * clicked_pos * vec2(1.0 / window_size.x, 1.0 / window_size.y) - vec2(1.0, 1.0);
+    let inverse_mat = (mvp.projection.mul_mat4(&mvp.view.mul_mat4(&mvp.model))).inverse();
+    let mut point_in_scene_space_0 = inverse_mat.mul_vec4(vec4(
+        normalized_window_coord.x,
+        normalized_window_coord.y,
+        0.0,
+        1.0,
+    ));
+    point_in_scene_space_0 *= Vec4::splat(1.0 / point_in_scene_space_0.w);
+    let mut point_in_scene_space_1 = inverse_mat.mul_vec4(vec4(
+        normalized_window_coord.x,
+        normalized_window_coord.y,
+        0.5,
+        1.0,
+    ));
+    point_in_scene_space_1 *= Vec4::splat(1.0 / point_in_scene_space_1.w);
+    let dir = (point_in_scene_space_1 - point_in_scene_space_0)
+        .xyz()
+        .normalize();
 
-//     if let Some((point, normal)) = ray_scene_intersect(point_in_scene_space_0.xyz(), dir, scene) {
-//         // debug_overlay.occluding_tris = [scene.light; 3 * 7];
-//         // debug_overlay.intersections = [scene.light; 2 * ARR_MAX];
+    if let Some((point, normal)) = ray_scene_intersect(point_in_scene_space_0.xyz(), dir, scene) {
+        // debug_overlay.occluding_tris = [scene.light; 3 * 7];
+        // debug_overlay.intersections = [scene.light; 2 * ARR_MAX];
 
-//         let point = point + 0.005 * normal.normalize();
-//         let l0 = scene.light.0;
-//         let l1 = scene.light.1;
+        let point = point + 0.005 * normal.normalize();
+        let l0 = scene.light.0;
+        let l1 = scene.light.1;
 
-//         // Draw normal of clicked point
-//         // debug_overlay.normal = LineSegment(point, point + normal.normalize());
+        // Draw normal of clicked point
+        // debug_overlay.normal = LineSegment(point, point + normal.normalize());
 
-//         // Draw lines from point to linelight end-points, blocked by geometry
-//         // if let Some((isect, _)) = ray_scene_intersect(point, (l0 - point).normalize(), scene) {
-//         //     debug_overlay.tri_e0 = LineSegment(point, isect);
-//         // } else {
-//         //     debug_overlay.tri_e0 = LineSegment(point, l0);
-//         // }
-//         // if let Some((isect, _)) = ray_scene_intersect(point, (l1 - point).normalize(), scene) {
-//         //     debug_overlay.tri_e1 = LineSegment(point, isect);
-//         // } else {
-//         //     debug_overlay.tri_e1 = LineSegment(point, l1);
-//         // }
-//         use acceleration::GRID_SIZE;
+        // Draw lines from point to linelight end-points, blocked by geometry
+        // if let Some((isect, _)) = ray_scene_intersect(point, (l0 - point).normalize(), scene) {
+        //     debug_overlay.tri_e0 = LineSegment(point, isect);
+        // } else {
+        //     debug_overlay.tri_e0 = LineSegment(point, l0);
+        // }
+        // if let Some((isect, _)) = ray_scene_intersect(point, (l1 - point).normalize(), scene) {
+        //     debug_overlay.tri_e1 = LineSegment(point, isect);
+        // } else {
+        //     debug_overlay.tri_e1 = LineSegment(point, l1);
+        // }
+        use acceleration::GRID_SIZE;
 
-//         debug_overlay.light_triangle[1] = LineSegment(l0, point);
-//         debug_overlay.light_triangle[2] = LineSegment(l1, point);
-//         debug_overlay.boxes = [WireframeBox::default(); MAX_DEBUG_BOXES];
+        debug_overlay.light_triangle[1] = LineSegment(l0, point);
+        debug_overlay.light_triangle[2] = LineSegment(l1, point);
+        debug_overlay.boxes = [WireframeBox::default(); MAX_DEBUG_BOXES];
 
-//         let mut hit_boxes = 0;
-//         let pc = tri_aabb_precompute(l0, l1, point, accel_struct.bbox_size);
-//         for i in 0..GRID_SIZE {
-//             for j in 0..GRID_SIZE {
-//                 for k in 0..GRID_SIZE {
-//                     let ijk = vec3(i as f32, j as f32, k as f32);
-//                     let bbox_origin = accel_struct.origin + ijk * accel_struct.bbox_size;
-//                     if hit_boxes < MAX_DEBUG_BOXES && precomputed_tri_aabb_intersect(&pc, bbox_origin) {
-//                         debug_overlay.boxes[hit_boxes] = WireframeBox::aabb(bbox_origin, bbox_origin + accel_struct.bbox_size);
-//                         hit_boxes += 1;
-//                     }
-//                 }
-//             }
-//         }
+        let blas_size = accel_struct.size / (GRID_SIZE as f32);
+        let bbox_size = blas_size / (GRID_SIZE as f32);
 
+        let pc_blas = tri_aabb_precompute(l0, l1, point, blas_size);
+        let pc_bbox = tri_aabb_precompute(l0, l1, point, bbox_size);
 
-//         // let mut int_arr = IntervalArray {
-//         //     size: 0,
-//         //     data: [Vec2::ZERO; ARR_MAX],
-//         // };
-//         // add_interval(&mut int_arr, vec2(0.0, 1.0));
+        let mut hit_boxes = 0;
+        for i in 0..GRID_SIZE {
+        for j in 0..GRID_SIZE {
+        for k in 0..GRID_SIZE {
+            let ijk = vec3(i as f32, j as f32, k as f32);
+            let blas_origin = accel_struct.origin + ijk * blas_size;
 
-//         // // let mut occluders = 0;
-//         // for tri in scene.indices.chunks_exact(3) {
-//         //     if int_arr.size == 0 {
-//         //         break;
-//         //     }
+            if hit_boxes < MAX_DEBUG_BOXES && precomputed_tri_aabb_intersect(&pc_blas, blas_origin) {
+                debug_overlay.boxes[hit_boxes] = WireframeBox::aabb(blas_origin, blas_origin + blas_size);
+                hit_boxes += 1;
+            }
 
-//         //     let v0 = scene.vertices[tri[0] as usize].position;
-//         //     let v1 = scene.vertices[tri[1] as usize].position;
-//         //     let v2 = scene.vertices[tri[2] as usize].position;
+            for ii in 0..GRID_SIZE {
+            for jj in 0..GRID_SIZE {
+            for kk in 0..GRID_SIZE {
+                let ijk = vec3(ii as f32, jj as f32, kk as f32);
+                let bbox_origin = blas_origin + ijk * bbox_size;
 
-//         //     if let Some((interval, _)) = tri_tri_intersect(l0, l1, point, v0, v1, v2) {
-//         //         // println!("occluding interval: {}", interval);
-//         //         occlude_intervals(&mut int_arr, interval);
-//         //         // if occluders < debug_overlay.occluding_tris.len()/3 {
-//         //         //     debug_overlay.occluding_tris[occluders*3] = LineSegment(v0,v1);
-//         //         //     debug_overlay.occluding_tris[occluders*3+1] = LineSegment(v1,v2);
-//         //         //     debug_overlay.occluding_tris[occluders*3+2] = LineSegment(v2,v0);
-//         //         //     debug_overlay.intersections[2*occluders] = line;
-//         //         // }
-//         //         // occluders += 1;
-//         //     }
-//         // }
+                if hit_boxes < MAX_DEBUG_BOXES && precomputed_tri_aabb_intersect(&pc_bbox, bbox_origin) {
+                    debug_overlay.boxes[hit_boxes] = WireframeBox::aabb(bbox_origin, bbox_origin + bbox_size);
+                    hit_boxes += 1;
+                }
+            }}}
+        }}}
 
-//         // println!("number of intervals: {}", int_arr.size);
-//         // println!("intervals: {:?}", int_arr.data.get(0..int_arr.size));
+        // let mut int_arr = IntervalArray {
+        //     size: 0,
+        //     data: [Vec2::ZERO; ARR_MAX],
+        // };
+        // add_interval(&mut int_arr, vec2(0.0, 1.0));
 
-//         // for (i, interval) in int_arr.data.iter().enumerate() {
-//         //     let i0 = l * interval.x + l0;
-//         //     let i1 = l * interval.y + l0;
-//         //     debug_overlay.intersections[2 * i] = LineSegment(point, i0);
-//         //     debug_overlay.intersections[2 * i + 1] = LineSegment(point, i1);
-//         // }
+        // // let mut occluders = 0;
+        // for tri in scene.indices.chunks_exact(3) {
+        //     if int_arr.size == 0 {
+        //         break;
+        //     }
 
-//         unsafe {
-//             write_struct_to_buffer(
-//                 app.debug_buffer
-//                     .memory_ptr
-//                     .expect("Uniform buffer not mapped!"),
-//                 debug_overlay as *const DebugOverlay,
-//             );
-//         }
-//     }
-// }
+        //     let v0 = scene.vertices[tri[0] as usize].position;
+        //     let v1 = scene.vertices[tri[1] as usize].position;
+        //     let v2 = scene.vertices[tri[2] as usize].position;
+
+        //     if let Some((interval, _)) = tri_tri_intersect(l0, l1, point, v0, v1, v2) {
+        //         // println!("occluding interval: {}", interval);
+        //         occlude_intervals(&mut int_arr, interval);
+        //         // if occluders < debug_overlay.occluding_tris.len()/3 {
+        //         //     debug_overlay.occluding_tris[occluders*3] = LineSegment(v0,v1);
+        //         //     debug_overlay.occluding_tris[occluders*3+1] = LineSegment(v1,v2);
+        //         //     debug_overlay.occluding_tris[occluders*3+2] = LineSegment(v2,v0);
+        //         //     debug_overlay.intersections[2*occluders] = line;
+        //         // }
+        //         // occluders += 1;
+        //     }
+        // }
+
+        // println!("number of intervals: {}", int_arr.size);
+        // println!("intervals: {:?}", int_arr.data.get(0..int_arr.size));
+
+        // for (i, interval) in int_arr.data.iter().enumerate() {
+        //     let i0 = l * interval.x + l0;
+        //     let i1 = l * interval.y + l0;
+        //     debug_overlay.intersections[2 * i] = LineSegment(point, i0);
+        //     debug_overlay.intersections[2 * i + 1] = LineSegment(point, i1);
+        // }
+
+        unsafe {
+            write_struct_to_buffer(
+                app.debug_buffer
+                    .memory_ptr
+                    .expect("Uniform buffer not mapped!"),
+                debug_overlay as *const DebugOverlay,
+            );
+        }
+    }
+}
 
 fn ray_triangle_intersect(
     origin: Vec3,
