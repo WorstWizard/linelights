@@ -31,3 +31,23 @@ vec3 to_world(vec3 v) {
 vec3 to_world(vec4 v) {
     return (model*v).xyz;
 }
+
+const int GRID_SIZE = 4;
+const int BBOX_COUNT = GRID_SIZE*GRID_SIZE*GRID_SIZE;
+
+struct BufferView {
+    int offset;
+    int size;
+};
+struct BLAS {
+    BufferView buffer_views[BBOX_COUNT];
+};
+struct TLAS {
+    vec3 size;
+    vec3 origin;
+    BLAS subgrids[BBOX_COUNT];
+};
+
+layout(scalar, binding = 1) uniform accelerationStructure {
+    TLAS accel_struct;
+};

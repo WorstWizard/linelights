@@ -1,23 +1,3 @@
-const int GRID_SIZE = 4;
-const int BBOX_COUNT = GRID_SIZE*GRID_SIZE*GRID_SIZE;
-
-struct BufferView {
-    int offset;
-    int size;
-};
-struct BLAS {
-    BufferView buffer_views[BBOX_COUNT];
-};
-struct TLAS {
-    vec3 size;
-    vec3 origin;
-    BLAS subgrids[BBOX_COUNT];
-};
-
-layout(scalar, binding = 1) uniform accelerationStructure {
-    TLAS accel_struct;
-};
-
 float sample_line_light_analytic(vec3 pos, vec3 n, vec3 l0, vec3 l1, float I) {
     float A, B, C, D, E;
     vec3 ld = l1 - l0;
@@ -332,19 +312,6 @@ bool tri_aabb_intersect(PrecomputeVals pc, vec3 bbox_pos) {
            projected_normal_check(pc.pn_1, bbox_pos) &&
            projected_normal_check(pc.pn_2, bbox_pos);
 }
-
-// struct BufferView {
-//     int offset;
-//     int size;
-// };
-// struct BLAS {
-//     BufferView buffer_views[BBOX_COUNT];
-// };
-// struct TLAS {
-//     vec3 size;
-//     vec3 origin;
-//     BLAS subgrids[BBOX_COUNT];
-// };
 
 void main() {
     float I = 5.0;
