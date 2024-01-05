@@ -1,42 +1,9 @@
-#version 450
-#extension GL_EXT_scalar_block_layout : enable
-
-layout(location = 0) in vec3 inPos;
-layout(location = 1) in vec3 inNormal;
-layout(location = 0) out vec4 outColor;
-
-layout(binding = 0) uniform UBO {
-    mat4 model;
-    mat4 view;
-    mat4 proj;
-    vec4 l0_ubo;
-    vec4 l1_ubo;
-};
-
-struct Vertex {
-    vec3 pos;
-    vec3 normal;
-};
-layout(scalar, binding = 2) readonly buffer vertexBuffer {
-    Vertex verts[];
-};
-layout(binding = 3) readonly buffer indexBuffer {
-    uint indices[];
-};
-
 struct Ray {
     vec3 origin;
     vec3 direction;
     float t_max;
     bool hit;
 };
-
-vec3 to_world(vec3 v) {
-    return (model*vec4(v,1.0)).xyz;
-}
-vec3 to_world(vec4 v) {
-    return (model*v).xyz;
-}
 
 // Møller-Trumbore intersection
 bool ray_triangle_intersect(Ray r, vec3 v0, vec3 v1, vec3 v2) {
@@ -107,10 +74,10 @@ float sample_line_light_stochastic(vec3 pos, vec3 n, vec3 l0, vec3 l1, float I) 
         rays[i] = r;
     }
 
-    for (int i = 0; i < indices.length(); i += 3) {
-        vec3 v0 = to_world(verts[indices[i]].pos);
-        vec3 v1 = to_world(verts[indices[i+1]].pos);
-        vec3 v2 = to_world(verts[indices[i+2]].pos);
+    for (int i = 0; i < acceleration_indices.length(); i += 3) {
+        vec3 v0 = to_world(verts[acceleration_indices[i]].pos);
+        vec3 v1 = to_world(verts[acceleration_indices[i+1]].pos);
+        vec3 v2 = to_world(verts[acceleration_indices[i+2]].pos);
 
         for (int i=0; i<NUM_SAMPLES; i++) {
             Ray r = rays[i];

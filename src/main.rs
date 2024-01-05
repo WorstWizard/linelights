@@ -27,12 +27,12 @@ fn main() {
     let _client = tracy_client::Client::start();
     let _span = span!("init");
 
-    let analytic_shader = linelight_vk::make_shaders("shaders/simple_shader.vert", "shaders/analytic.frag");
-    let stochastic_shader = linelight_vk::make_shaders("shaders/simple_shader.vert", "shaders/stochastic.frag");
-    let debug_shader = linelight_vk::make_shaders("shaders/simple_shader.vert", "shaders/debug.frag");
+    let analytic_shader = linelight_vk::make_shaders("shaders/simple_shader.vert", "shaders/analytic.frag", true);
+    let stochastic_shader = linelight_vk::make_shaders("shaders/simple_shader.vert", "shaders/stochastic.frag", true);
+    let debug_shader = linelight_vk::make_shaders("shaders/simple_shader.vert", "shaders/debug.frag", false);
 
     let shaders = vec![analytic_shader, stochastic_shader, debug_shader];
-    let debug_shaders = linelight_vk::make_shaders("shaders/debugger.vert", "shaders/debugger.frag");
+    let debug_shaders = linelight_vk::make_shaders("shaders/debugger.vert", "shaders/debugger.frag", false);
     let ubo_bindings = linelight_vk::make_ubo_bindings();
     
 

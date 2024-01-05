@@ -42,16 +42,55 @@ impl Vertex {
     }
 }
 
-pub fn make_shaders(vert_path: &str, frag_path: &str) -> Vec<vk_engine::shaders::Shader> {
+use std::fs::File;
+use std::io::{Read, Write};
+pub fn make_shaders(vert_path: &str, frag_path: &str, prelude: bool) -> Vec<vk_engine::shaders::Shader> {
     let _span = span!("make_shaders");
     println!("Compiling shaders...");
-    let shaders = vec![
-        shaders::compile_shader(vert_path, None, shaders::ShaderType::Vertex)
-            .expect("Could not compile vertex shader"),
-        shaders::compile_shader(frag_path, None, shaders::ShaderType::Fragment)
-            .expect("Could not compile fragment shader"),
-    ];
-    shaders
+
+    fn load_to_string(path: &str) -> String {
+        let mut file = File::open(path).expect("No file");
+        let mut buf_str = String::new();
+        file.read_to_string(&mut buf_str).expect("Could not read file");
+        buf_str
+    }
+
+    if prelude {
+        let vert_prelude = load_to_string("shaders/prelude.vert");
+        let frag_prelude = load_to_string("shaders/prelude.frag");
+        let vert_file = load_to_string(vert_path);
+        let frag_file = load_to_string(frag_path);
+        let vert_str = vert_prelude + &vert_file;
+        let frag_str = frag_prelude + &frag_file;
+
+        // for i in 0..10 {
+        //     println!("{}", frag_str.lines().nth(i).unwrap());
+        // }
+
+        let mut tmp_vert_file = File::create("tmp.vert").unwrap();
+        let mut tmp_frag_file = File::create("tmp.frag").unwrap();
+        tmp_vert_file.write_all(vert_str.as_bytes()).unwrap();
+        tmp_frag_file.write_all(frag_str.as_bytes()).unwrap();
+
+        let shaders = vec![
+            shaders::compile_shader("tmp.vert", None, shaders::ShaderType::Vertex)
+                .expect("Could not compile vertex shader"),
+            shaders::compile_shader("tmp.frag", None, shaders::ShaderType::Fragment)
+                .expect("Could not compile fragment shader"),
+        ];
+
+        std::fs::remove_file("tmp.vert").unwrap();
+        std::fs::remove_file("tmp.frag").unwrap();
+
+        shaders
+    } else {
+        vec![
+            shaders::compile_shader(vert_path, None, shaders::ShaderType::Vertex)
+                .expect("Could not compile vertex shader"),
+            shaders::compile_shader(frag_path, None, shaders::ShaderType::Fragment)
+                .expect("Could not compile fragment shader"),
+        ]
+    }
 }
 
 pub fn make_ubo_bindings() -> Vec<vk::DescriptorSetLayoutBinding> {
