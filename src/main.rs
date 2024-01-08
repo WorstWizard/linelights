@@ -548,14 +548,14 @@ fn update_debug_overlay(
             let ijk = vec3(i as f32, j as f32, k as f32);
             let blas_origin = accel_struct.origin + ijk * blas_size;
 
-            // if hit_boxes < MAX_DEBUG_BOXES && precomputed_tri_aabb_intersect(&pc_blas, blas_origin) {
-            //     debug_overlay.boxes[hit_boxes] = WireframeBox::aabb(blas_origin, blas_origin + blas_size);
-            //     hit_boxes += 1;
-            // }
-            if hit_boxes < MAX_DEBUG_BOXES && ray_aabb_intersect(point, (l0-point).normalize(), blas_origin, blas_size) {
+            if hit_boxes < MAX_DEBUG_BOXES && precomputed_tri_aabb_intersect(&pc_blas, blas_origin) {
                 debug_overlay.boxes[hit_boxes] = WireframeBox::aabb(blas_origin, blas_origin + blas_size);
                 hit_boxes += 1;
             }
+            // if hit_boxes < MAX_DEBUG_BOXES && ray_aabb_intersect(point, (l0-point).normalize(), blas_origin, blas_size) {
+            //     debug_overlay.boxes[hit_boxes] = WireframeBox::aabb(blas_origin, blas_origin + blas_size);
+            //     hit_boxes += 1;
+            // }
 
             for ii in 0..GRID_SIZE {
             for jj in 0..GRID_SIZE {
@@ -563,14 +563,14 @@ fn update_debug_overlay(
                 let ijk = vec3(ii as f32, jj as f32, kk as f32);
                 let bbox_origin = blas_origin + ijk * bbox_size;
 
-                // if hit_boxes < MAX_DEBUG_BOXES && precomputed_tri_aabb_intersect(&pc_bbox, bbox_origin) {
-                //     debug_overlay.boxes[hit_boxes] = WireframeBox::aabb(bbox_origin, bbox_origin + bbox_size);
-                //     hit_boxes += 1;
-                // }
-                if hit_boxes < MAX_DEBUG_BOXES && ray_aabb_intersect(point, (l0-point).normalize(), bbox_origin, bbox_size) {
+                if hit_boxes < MAX_DEBUG_BOXES && precomputed_tri_aabb_intersect(&pc_bbox, bbox_origin) {
                     debug_overlay.boxes[hit_boxes] = WireframeBox::aabb(bbox_origin, bbox_origin + bbox_size);
                     hit_boxes += 1;
                 }
+                // if hit_boxes < MAX_DEBUG_BOXES && ray_aabb_intersect(point, (l0-point).normalize(), bbox_origin, bbox_size) {
+                //     debug_overlay.boxes[hit_boxes] = WireframeBox::aabb(bbox_origin, bbox_origin + bbox_size);
+                //     hit_boxes += 1;
+                // }
             }}}
         }}}
 
@@ -622,18 +622,6 @@ fn update_debug_overlay(
             );
         }
     }
-}
-
-fn ray_aabb_intersect(origin: Vec3, direction: Vec3, bbox_origin: Vec3, bbox_size: Vec3) -> bool {
-    let bbox_center = bbox_origin + 0.5*bbox_size;
-    let m = 1.0/direction;
-    let n = m*(origin - bbox_center);
-    let k = m.abs()*bbox_size*0.5;
-    let t1 = -n - k;
-    let t2 = -n + k;
-    let tN = f32::max( f32::max( t1.x, t1.y ), t1.z );
-    let tF = f32::min( f32::min( t2.x, t2.y ), t2.z );
-    return !(tN>tF || tF<0.0)
 }
 
 fn ray_triangle_intersect(
