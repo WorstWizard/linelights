@@ -51,3 +51,14 @@ struct TLAS {
 layout(scalar, binding = 1) uniform accelerationStructure {
     TLAS accel_struct;
 };
+
+
+// Simple heatmap from -1.0 to +1.0
+vec3 heatmap(float t) {
+    vec3 blue = vec3(0.0,0.0,1.0);
+    vec3 red = vec3(1.0,0.0,0.0);
+    vec3 white = vec3(1.0);
+    if (t > 0.0)
+        return mix(red,white,t);
+    return mix(red,blue,-t);
+}

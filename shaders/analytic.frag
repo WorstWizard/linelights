@@ -222,17 +222,6 @@ float noise() {
     uint  n = 1103515245U * ( (q.x  ) ^ (q.y>>3U) );
     return float(n) * (1.0/float(0xffffffffU));
 }
-
-// Simple heatmap from -1.0 to +1.0
-vec3 heatmap(float t) {
-    vec3 blue = vec3(0.0,0.0,1.0);
-    vec3 red = vec3(1.0,0.0,0.0);
-    vec3 white = vec3(1.0);
-    if (t > 0.0)
-        return mix(red,white,t);
-    return mix(red,blue,-t);
-}
-
 struct ProjNormalVals {
     vec2 n_xy;
     vec2 n_yz;
