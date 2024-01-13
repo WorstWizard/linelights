@@ -29,16 +29,17 @@ fn main() {
 
     let analytic_shader = linelight_vk::make_shaders("shaders/simple_shader.vert", "shaders/analytic.frag", true);
     let stochastic_shader = linelight_vk::make_shaders("shaders/simple_shader.vert", "shaders/stochastic.frag", true);
-    let debug_shader = linelight_vk::make_shaders("shaders/simple_shader.vert", "shaders/debug.frag", false);
+    let debug_shader = linelight_vk::make_shaders("shaders/simple_shader.vert", "shaders/debug.frag", true);
 
     let shaders = vec![analytic_shader, stochastic_shader, debug_shader];
-    let debug_shaders = linelight_vk::make_shaders("shaders/debugger.vert", "shaders/debugger.frag", false);
+    let debug_overlay_shaders = linelight_vk::make_shaders("shaders/debugger.vert", "shaders/debugger.frag", false);
     let ubo_bindings = linelight_vk::make_ubo_bindings();
     
 
     println!("Loading model...");
-    let scene = Scene::dragon_small_light(32);
+    // let scene = Scene::dragon_small_light(32);
     // let scene = Scene::sponza(32);
+    let scene = Scene::grid_box(80);
     let (accel_struct, accel_indices) =
         acceleration::build_acceleration_structure(&scene);
 
@@ -47,7 +48,7 @@ fn main() {
 
     let (mut app, event_loop, vid, did) = linelight_vk::make_custom_app(
         &shaders,
-        &debug_shaders,
+        &debug_overlay_shaders,
         &ubo_bindings,
         &scene,
         &accel_struct,
@@ -76,8 +77,11 @@ fn main() {
     // camera.rotate(std::f32::consts::FRAC_PI_2, 0.0);
     // camera.eye = vec3(-1.3054297, -2.1971848, -4.514163);
     // camera.rotate(0.3527179, -2.8560042);
-    camera.eye = vec3(0.62512153, -1.386372, -0.9759541);
-    camera.rotate(0.41871738, -2.8680065);
+    // camera.eye = vec3(0.62512153, -1.386372, -0.9759541);
+    // camera.rotate(0.41871738, -2.8680065);
+
+    camera.eye = vec3(0.0, -0.6, 1.0);
+    camera.rotate(0.1, 0.0);
 
     let model_pos = vec3(0.0, 0.0, 0.0);
     let model_scale = 0.5;
@@ -126,7 +130,7 @@ fn main() {
                 let _img_index_span = span!("Get image index");
                 let img_index = match app.acquire_next_image(current_frame) {
                     Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
-                        app.recreate_swapchain(&shaders, &debug_shaders, &vid, &did, &ubo_bindings);
+                        app.recreate_swapchain(&shaders, &debug_overlay_shaders, &vid, &did, &ubo_bindings);
                         return;
                     }
                     Ok((i, _)) => i, // Swapchain may be suboptimal, but it's easier to just proceed
@@ -297,7 +301,7 @@ fn main() {
                 let _present_span = span!("Presentation");
                 match app.present_image(img_index, app.sync.render_finished[current_frame]) {
                     Ok(true) | Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
-                        app.recreate_swapchain(&shaders, &debug_shaders, &vid, &did, &ubo_bindings)
+                        app.recreate_swapchain(&shaders, &debug_overlay_shaders, &vid, &did, &ubo_bindings)
                     }
                     Ok(false) => (),
                     _ => panic!("Could not present image!"),

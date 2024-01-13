@@ -53,12 +53,12 @@ layout(scalar, binding = 1) uniform accelerationStructure {
 };
 
 
-// Simple heatmap from -1.0 to +1.0
+// Simple heatmap from 0.0 to +1.0
 vec3 heatmap(float t) {
-    vec3 blue = vec3(0.0,0.0,1.0);
-    vec3 red = vec3(1.0,0.0,0.0);
-    vec3 white = vec3(1.0);
-    if (t > 0.0)
-        return mix(red,white,t);
-    return mix(red,blue,-t);
+    vec3 dark = vec3(0.0,0.0,50.0/255.0);
+    vec3 mid = vec3(1.0,80.0/255.0,0.0);
+    vec3 bright = vec3(1.0);
+    if (t > 0.5)
+        return mix(mid,bright,2.0*t - 1.0);
+    return mix(dark,mid,2.0*t);
 }
