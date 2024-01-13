@@ -74,8 +74,10 @@ fn main() {
     // camera.eye = vec3(0.0, -4.0, 5.0);
     // camera.eye = vec3(0.0, -6.0, 0.0);
     // camera.rotate(std::f32::consts::FRAC_PI_2, 0.0);
-    camera.eye = vec3(-1.3054297, -2.1971848, -4.514163);
-    camera.rotate(0.3527179, -2.8560042);
+    // camera.eye = vec3(-1.3054297, -2.1971848, -4.514163);
+    // camera.rotate(0.3527179, -2.8560042);
+    camera.eye = vec3(0.62512153, -1.386372, -0.9759541);
+    camera.rotate(0.41871738, -2.8680065);
 
     let model_pos = vec3(0.0, 0.0, 0.0);
     let model_scale = 0.5;
