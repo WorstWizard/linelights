@@ -174,10 +174,11 @@ bool tri_tri_intersect_custom(
 }
 
 // Records info on which parts of a linelight is visible as an array of intervals (t-values in [0,1])
-const int ARR_MAX = 32;
+const int ARR_MAX = 4;
 struct IntervalArray {
     int size;
     int operations;
+    int highest_int_count;
     bool hit_max;
     vec2[ARR_MAX] data;
 };
@@ -195,6 +196,7 @@ void add_interval(inout IntervalArray int_arr, vec2 new_interval) {
     } else { 
         int_arr.data[int_arr.size] = new_interval;
         int_arr.size++;
+        int_arr.highest_int_count = max(int_arr.size, int_arr.highest_int_count);
     }
 }
 // Given an interval of occlusion, update the array to reflect the new visible intervals
@@ -330,6 +332,7 @@ void main() {
     IntervalArray int_arr;
     int_arr.size = 0;
     int_arr.operations = 0;
+    int_arr.highest_int_count = 0;
     int_arr.hit_max = false;
     add_interval(int_arr, vec2(0.0,1.0));
 
@@ -386,12 +389,13 @@ void main() {
     //     float fraction_of_light = I * (interval.y - interval.x);
     //     irr += sample_line_light_analytic(pos, n, p0, p1, fraction_of_light);
     // }
-    int max_ops = 40;
+    // int max_ops = 40;
     vec3 color;
     if (int_arr.hit_max) {
         color = vec3(0.0,1.0,0.0);
     } else {
-        color = heatmap(float(int_arr.operations) / float(max_ops));
+        // color = heatmap(float(int_arr.operations) / float(max_ops));
+        color = heatmap(float(int_arr.highest_int_count) / float(ARR_MAX));
     }
     
     // vec3 color = 1.0 - exp(-irr * vec3(1.0) - ambient);

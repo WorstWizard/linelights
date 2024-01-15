@@ -19,7 +19,7 @@ use input_handling::*;
 
 // Some config options
 const SPEED: f32 = 1.0;
-const ENABLE_DEBUG: bool = true;
+const ENABLE_DEBUG: bool = false;
 
 
 fn main() {
@@ -39,7 +39,7 @@ fn main() {
     println!("Loading model...");
     // let scene = Scene::dragon_small_light(32);
     // let scene = Scene::sponza(32);
-    let scene = Scene::grid_box(80);
+    let scene = Scene::grid_box(5);
     let (accel_struct, accel_indices) =
         acceleration::build_acceleration_structure(&scene);
 

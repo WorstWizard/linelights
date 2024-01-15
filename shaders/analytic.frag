@@ -174,7 +174,7 @@ bool tri_tri_intersect_custom(
 }
 
 // Records info on which parts of a linelight is visible as an array of intervals (t-values in [0,1])
-const int ARR_MAX = 32;
+const int ARR_MAX = 4;
 struct IntervalArray {
     int size;
     vec2[ARR_MAX] data;
@@ -302,17 +302,12 @@ bool tri_aabb_intersect(PrecomputeVals pc, vec3 bbox_pos) {
            projected_normal_check(pc.pn_2, bbox_pos);
 }
 
-void main() {
-    float I = 5.0;
-    vec3 ambient = vec3(0.1);
 
-    vec3 pos = to_world(inPos);
-    vec3 n = normalize(to_world(inNormal));
 
-    vec3 l0 = to_world(l0_ubo);
-    vec3 l1 = to_world(l1_ubo);
-    vec3 L = l1 - l0;
 
+
+
+IntervalArray intersect_scene_top_bottom(vec3 pos, vec3 n, vec3 l0, vec3 l1) {
     // Precompute AABB grid intermediate values for fast intersection
     vec3 blas_size = accel_struct.size / float(GRID_SIZE);
     vec3 bbox_size = blas_size / float(GRID_SIZE);
@@ -368,6 +363,114 @@ void main() {
         }
         blas_index++;
     }}}
+
+    return int_arr;
+}
+
+IntervalArray intersect_scene_bottom_only(vec3 pos, vec3 n, vec3 l0, vec3 l1) {
+    // Precompute AABB grid intermediate values for fast intersection
+    vec3 blas_size = accel_struct.size / float(GRID_SIZE);
+    vec3 bbox_size = blas_size / float(GRID_SIZE);
+    PrecomputeVals blas_precompute = tri_aabb_precompute(l0_ubo.xyz, l1_ubo.xyz, inPos, blas_size);
+    PrecomputeVals bbox_precompute = tri_aabb_precompute(l0_ubo.xyz, l1_ubo.xyz, inPos, bbox_size);
+
+    // Initialize interval array
+    IntervalArray int_arr;
+    int_arr.size = 0;
+    add_interval(int_arr, vec2(0.0,1.0));
+
+    // For each bounding box, test first if it intersects the light-triangle at all
+    // bool early_out = false;
+    int blas_index = 0;
+    for (int blas_i=0; blas_i<GRID_SIZE; blas_i++) {
+    for (int blas_j=0; blas_j<GRID_SIZE; blas_j++) {
+    for (int blas_k=0; blas_k<GRID_SIZE; blas_k++) {
+        vec3 ijk = vec3(blas_i, blas_j, blas_k);
+        vec3 blas_origin = accel_struct.origin + ijk * blas_size;
+
+        if (true) {
+            // if (early_out) break;
+
+            int bbox_index = 0;
+            for (int bbox_i=0; bbox_i<GRID_SIZE; bbox_i++) {
+            for (int bbox_j=0; bbox_j<GRID_SIZE; bbox_j++) {
+            for (int bbox_k=0; bbox_k<GRID_SIZE; bbox_k++) {
+                vec3 ijk = vec3(bbox_i, bbox_j, bbox_k);
+                vec3 bbox_origin = blas_origin + ijk * bbox_size;
+
+                if (tri_aabb_intersect(bbox_precompute, bbox_origin)) {
+
+                    BufferView buffer_view = accel_struct.subgrids[blas_index].buffer_views[bbox_index];
+                    
+                    // For each triangle, compute whether it could occlude the linelight, if so, update intervals
+                    for (int i = buffer_view.offset; i < buffer_view.offset+buffer_view.size; i += 3) {
+                        // if (int_arr.size == 0) early_out = true; // Early stop
+                        // if (early_out) break;
+
+                        vec3 v0 = to_world(verts[acceleration_indices[i]].pos);
+                        vec3 v1 = to_world(verts[acceleration_indices[i+1]].pos);
+                        vec3 v2 = to_world(verts[acceleration_indices[i+2]].pos);
+
+                        vec2 interval;
+                        if (tri_tri_intersect_custom(l0,l1,pos+0.001*n, v0,v1,v2, interval)) {
+                            occlude_intervals(int_arr, interval);
+                        }
+                    }
+                }
+
+                bbox_index++;
+            }}}
+        }
+        blas_index++;
+    }}}
+
+    return int_arr;
+}
+
+IntervalArray intersect_scene_brute(vec3 pos, vec3 n, vec3 l0, vec3 l1) {
+    // Initialize interval array
+    IntervalArray int_arr;
+    int_arr.size = 0;
+    add_interval(int_arr, vec2(0.0,1.0));
+
+    // For each bounding box, test first if it intersects the light-triangle at all
+    // bool early_out = false;
+    for (int blas_i=0; blas_i<GRID_SIZE*GRID_SIZE*GRID_SIZE; blas_i++) {
+    for (int bbox_i=0; bbox_i<GRID_SIZE*GRID_SIZE*GRID_SIZE; bbox_i++) {
+        BufferView buffer_view = accel_struct.subgrids[blas_i].buffer_views[bbox_i];
+        for (int i = buffer_view.offset; i < buffer_view.offset+buffer_view.size; i += 3) {
+            vec3 v0 = to_world(verts[acceleration_indices[i]].pos);
+            vec3 v1 = to_world(verts[acceleration_indices[i+1]].pos);
+            vec3 v2 = to_world(verts[acceleration_indices[i+2]].pos);
+
+            vec2 interval;
+            if (tri_tri_intersect_custom(l0,l1,pos+0.001*n, v0,v1,v2, interval)) {
+                occlude_intervals(int_arr, interval);
+            }
+        }
+    }
+    }
+
+    return int_arr;
+}
+
+
+
+
+
+void main() {
+    float I = 5.0;
+    vec3 ambient = vec3(0.1);
+
+    vec3 pos = to_world(inPos);
+    vec3 n = normalize(to_world(inNormal));
+
+    vec3 l0 = to_world(l0_ubo);
+    vec3 l1 = to_world(l1_ubo);
+    vec3 L = l1 - l0;
+
+    // Initialize interval array
+    IntervalArray int_arr = intersect_scene_brute(pos, n, l0, l1);
 
     float irr = 0.0;
     for (int i = 0; i < int_arr.size; i++) {
