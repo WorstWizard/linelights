@@ -89,7 +89,7 @@ impl Scene {
             vertices,
             indices,
             light: light
-                .expect("Not using proper version of Sponza scene: Needs a 'Linelight' object."),
+                .expect("Not using proper version of dragon scene: Needs a 'Linelight' object."),
         }
     }
     pub fn dragon_small_light(level: u32) -> Self {
@@ -99,7 +99,7 @@ impl Scene {
             vertices,
             indices,
             light: light
-                .expect("Not using proper version of Sponza scene: Needs a 'Linelight' object."),
+                .expect("Not using proper version of dragon scene: Needs a 'Linelight' object."),
         }
     }
     pub fn grid_box(level: u32) -> Self {
@@ -109,7 +109,17 @@ impl Scene {
             vertices,
             indices,
             light: light
-                .expect("Not using proper version of Sponza scene: Needs a 'Linelight' object."),
+                .expect("Not using proper version of box scene: Needs a 'Linelight' object."),
+        }
+    }
+    pub fn grating_test() -> Self {
+        let (vertices, indices, light) =
+            Scene::load_gltf_mesh("models/grating_test.glb");
+        Scene {
+            vertices,
+            indices,
+            light: light
+                .expect("Not using proper version of grating scene: Needs a 'Linelight' object."),
         }
     }
 
