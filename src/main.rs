@@ -39,7 +39,8 @@ fn main() {
     println!("Loading model...");
     // let scene = Scene::dragon_small_light(32);
     // let scene = Scene::sponza(32);
-    let scene = Scene::grid_box(5);
+    let mut scene = Scene::grating_test();
+    scene.light.1 = scene.light.0.lerp(scene.light.1, 64.0/64.0);
     let (accel_struct, accel_indices) =
         acceleration::build_acceleration_structure(&scene);
 
