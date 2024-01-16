@@ -214,14 +214,6 @@ void occlude_intervals(inout IntervalArray int_arr, vec2 occ_int) {
         }
     }
 }
-
-// 2D hash with good performance, as per https://www.shadertoy.com/view/4tXyWN, recommended/tested in [Jarzynski 2020]
-float noise() {
-    uvec2 x = uvec2(uint(gl_FragCoord.x),uint(gl_FragCoord.y));
-    uvec2 q = 1103515245U * ( (x>>1U) ^ (x.yx   ) );
-    uint  n = 1103515245U * ( (q.x  ) ^ (q.y>>3U) );
-    return float(n) * (1.0/float(0xffffffffU));
-}
 struct ProjNormalVals {
     vec2 n_xy;
     vec2 n_yz;
@@ -459,7 +451,7 @@ IntervalArray intersect_scene_brute(vec3 pos, vec3 n, vec3 l0, vec3 l1) {
 
 
 void main() {
-    float I = 5.0;
+    float I = 10.0;
     vec3 ambient = vec3(0.1);
 
     vec3 pos = to_world(inPos);

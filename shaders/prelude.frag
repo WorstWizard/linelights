@@ -62,3 +62,11 @@ vec3 heatmap(float t) {
         return mix(mid,bright,2.0*t - 1.0);
     return mix(dark,mid,2.0*t);
 }
+
+// 2D hash with good performance, as per https://www.shadertoy.com/view/4tXyWN, recommended/tested in [Jarzynski 2020]
+float noise() {
+    uvec2 x = uvec2(uint(gl_FragCoord.x),uint(gl_FragCoord.y));
+    uvec2 q = 1103515245U * ( (x>>1U) ^ (x.yx   ) );
+    uint  n = 1103515245U * ( (q.x  ) ^ (q.y>>3U) );
+    return float(n) * (1.0/float(0xffffffffU));
+}
