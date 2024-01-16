@@ -174,7 +174,7 @@ bool tri_tri_intersect_custom(
 }
 
 // Records info on which parts of a linelight is visible as an array of intervals (t-values in [0,1])
-const int ARR_MAX = 64;
+const int ARR_MAX = 32;
 struct IntervalArray {
     int size;
     int operations;

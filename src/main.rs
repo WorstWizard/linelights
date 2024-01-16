@@ -1,3 +1,5 @@
+use std::ops::DerefMut;
+
 use acceleration::{precomputed_tri_aabb_intersect, tri_aabb_precompute};
 use ash::vk;
 use glam::{vec2, vec3, vec4, Mat4, Vec2, Vec3, Vec4, Vec4Swizzles};
@@ -37,7 +39,7 @@ fn main() {
     
 
     println!("Loading model...");
-    let scene = Scene::clipping_test();
+    let scene = Scene::dragon_small_light(32);
     // let scene = Scene::sponza(32);
     // let mut scene = Scene::grating_test();
     // scene.light.1 = scene.light.0.lerp(scene.light.1, 64.0/64.0);
@@ -71,6 +73,8 @@ fn main() {
     let mut inputs = Inputs::default();
     let mut just_took_screenshot = false; // Helper variable to ensure only one is taken per keypress
     let mut just_printed_info = false;
+    let mut light_wiggle = true;
+    let mut wiggle_t = 0.0;
     // Facing wrong way? Everything regarding view/projection is scuffed, gotta fix it at some point
     let mut camera = Camera::new();
     // camera.eye = vec3(0.0, -4.0, 5.0);
@@ -200,13 +204,33 @@ fn main() {
 
                 mvp.view = Mat4::look_to_rh(camera.eye, camera.direction(), camera.up());
 
+                let (l0, l1) = if light_wiggle {
+                    wiggle_t += delta_time;
+                    let l0 = Vec4::from((scene.light.0 + f32::sin(wiggle_t)*Vec3::Y, 1.0));
+                    let l1 = Vec4::from((scene.light.1 + f32::cos(wiggle_t)*Vec3::Y, 1.0));
+                    debug_overlay.light_triangle[0] = LineSegment(l0.xyz(), l1.xyz());
+                    unsafe {
+                        write_struct_to_buffer(
+                            app.debug_buffer
+                                .memory_ptr
+                                .expect("Uniform buffer not mapped!"),
+                            debug_overlay.as_ref() as *const DebugOverlay,
+                        );
+                    }
+                    (l0, l1)
+                } else {
+                    (
+                        Vec4::from((scene.light.0, 1.0)),
+                        Vec4::from((scene.light.1, 1.0))
+                    )
+                };
                 let aspect_ratio =
                     app.swapchain_extent.width as f32 / app.swapchain_extent.height as f32;
                 mvp.projection =
                     Mat4::perspective_infinite_rh(f32::to_radians(90.0), aspect_ratio, 0.01);
                 let ubo = LineLightUniform {
-                    l0: Vec4::from((scene.light.0, 1.0)),
-                    l1: Vec4::from((scene.light.1, 1.0)),
+                    l0,
+                    l1,
                     mvp: mvp.clone(),
                 };
                 if inputs.info && !just_printed_info {
