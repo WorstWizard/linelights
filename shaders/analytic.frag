@@ -469,8 +469,8 @@ void main() {
     vec3 l1 = to_world(l1_ubo);
     vec3 L = l1 - l0;
 
-    // Initialize interval array
-    IntervalArray int_arr = intersect_scene_brute(pos, n, l0, l1);
+    // IntervalArray int_arr = intersect_scene_brute(pos, n, l0, l1);
+    IntervalArray int_arr = intersect_scene_top_bottom(pos, n, l0, l1);
 
     float irr = 0.0;
     for (int i = 0; i < int_arr.size; i++) {

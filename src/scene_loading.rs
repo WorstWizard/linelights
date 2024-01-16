@@ -122,6 +122,16 @@ impl Scene {
                 .expect("Not using proper version of grating scene: Needs a 'Linelight' object."),
         }
     }
+    pub fn clipping_test() -> Self {
+        let (vertices, indices, light) =
+            Scene::load_gltf_mesh("models/clipping_test.glb");
+        Scene {
+            vertices,
+            indices,
+            light: light
+                .expect("Not using proper version of clipping scene: Needs a 'Linelight' object."),
+        }
+    }
 
     fn load_gltf_mesh(path: &str) -> (Vec<Vertex>, Vec<u32>, Option<LineSegment>) {
         let (doc, buffers, _) = gltf::import(path).unwrap();

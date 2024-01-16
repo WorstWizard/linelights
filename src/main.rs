@@ -19,7 +19,7 @@ use input_handling::*;
 
 // Some config options
 const SPEED: f32 = 1.0;
-const ENABLE_DEBUG: bool = false;
+const ENABLE_DEBUG: bool = true;
 
 
 fn main() {
@@ -37,10 +37,10 @@ fn main() {
     
 
     println!("Loading model...");
-    // let scene = Scene::dragon_small_light(32);
+    let scene = Scene::clipping_test();
     // let scene = Scene::sponza(32);
-    let mut scene = Scene::grating_test();
-    scene.light.1 = scene.light.0.lerp(scene.light.1, 64.0/64.0);
+    // let mut scene = Scene::grating_test();
+    // scene.light.1 = scene.light.0.lerp(scene.light.1, 64.0/64.0);
     let (accel_struct, accel_indices) =
         acceleration::build_acceleration_structure(&scene);
 
@@ -76,13 +76,13 @@ fn main() {
     // camera.eye = vec3(0.0, -4.0, 5.0);
     // camera.eye = vec3(0.0, -6.0, 0.0);
     // camera.rotate(std::f32::consts::FRAC_PI_2, 0.0);
-    // camera.eye = vec3(-1.3054297, -2.1971848, -4.514163);
-    // camera.rotate(0.3527179, -2.8560042);
+    camera.eye = vec3(-1.3054297, -2.1971848, -4.514163);
+    camera.rotate(0.3527179, -2.8560042);
     // camera.eye = vec3(0.62512153, -1.386372, -0.9759541);
     // camera.rotate(0.41871738, -2.8680065);
 
-    camera.eye = vec3(0.0, -0.6, 1.0);
-    camera.rotate(0.1, 0.0);
+    // camera.eye = vec3(0.0, -0.6, 1.0);
+    // camera.rotate(0.1, 0.0);
 
     let model_pos = vec3(0.0, 0.0, 0.0);
     let model_scale = 0.5;
