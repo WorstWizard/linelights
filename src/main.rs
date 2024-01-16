@@ -21,7 +21,7 @@ use input_handling::*;
 
 // Some config options
 const SPEED: f32 = 1.0;
-const ENABLE_DEBUG: bool = true;
+const ENABLE_DEBUG: bool = false;
 
 
 fn main() {
@@ -71,9 +71,12 @@ fn main() {
     }
 
     let mut inputs = Inputs::default();
+    // Temporary: To measure stochastic shader more conveniently:
+    inputs.selected_shader = 1;
+
     let mut just_took_screenshot = false; // Helper variable to ensure only one is taken per keypress
     let mut just_printed_info = false;
-    let mut light_wiggle = true;
+    let light_wiggle = false;
     let mut wiggle_t = 0.0;
     // Facing wrong way? Everything regarding view/projection is scuffed, gotta fix it at some point
     let mut camera = Camera::new();
