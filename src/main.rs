@@ -37,7 +37,7 @@ fn main() {
     
 
     println!("Loading model...");
-    let scene = Scene::dragon_small_light(32);
+    let scene = Scene::dragon_small_light(16);
     // let scene = Scene::sponza(32);
     // let mut scene = Scene::grating_test();
     // scene.light.1 = scene.light.0.lerp(scene.light.1, 64.0/64.0);
@@ -70,7 +70,7 @@ fn main() {
 
     let mut inputs = Inputs::default();
     // Temporary: To measure stochastic shader more conveniently:
-    inputs.selected_shader = 1;
+    // inputs.selected_shader = 1;
 
     let mut just_took_screenshot = false; // Helper variable to ensure only one is taken per keypress
     let mut just_printed_info = false;
@@ -81,13 +81,16 @@ fn main() {
     // camera.eye = vec3(0.0, -4.0, 5.0);
     // camera.eye = vec3(0.0, -6.0, 0.0);
     // camera.rotate(std::f32::consts::FRAC_PI_2, 0.0);
-    camera.eye = vec3(1.9490113, -2.0318327, -2.0184014);
-    camera.rotate(0.43671742, -3.228007);
-    // camera.eye = vec3(0.62512153, -1.386372, -0.9759541);
-    // camera.rotate(0.41871738, -2.8680065);
+    // camera.eye = vec3(1.9490113, -2.0318327, -2.0184014);
+    // camera.rotate(0.43671742, -3.228007);
+    camera.eye = vec3(0.62512153, -1.386372, -0.9759541);
+    camera.rotate(0.41871738, -2.8680065);
 
     // camera.eye = vec3(0.0, -0.6, 1.0);
     // camera.rotate(0.1, 0.0);
+
+    // camera.eye = vec3(-1.3054297, -2.1971848, -4.514163);
+    // camera.rotate(0.3527179, -2.8560042);
 
     let model_pos = vec3(0.0, 0.0, 0.0);
     let model_scale = 0.5;
@@ -237,11 +240,12 @@ fn main() {
                 if inputs.info && !just_printed_info {
                     just_printed_info = true;
                     println!(
-                        "Camera:\n\t Position: {}, Direction: {}, Angles: {:?}",
+                        "Camera:\t Position: {}, Direction: {}, Angles: {:?}",
                         camera.eye,
                         camera.direction(),
                         camera.polar_angles()
                     );
+                    println!("Last frametime: {}ms", delta_time*1000.0);
                 } else if !inputs.info {
                     just_printed_info = false;
                 }

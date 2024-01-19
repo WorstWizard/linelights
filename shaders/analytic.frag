@@ -115,14 +115,14 @@ vec2 compute_intervals_custom(
     bool intersects_right = linesegments_intersect(l1.xz,pos.xz,isect0.xz,isect1.xz);
     if (intersects_left) {
         if (intersects_right) { // Both
-            return vec2(-1.0, 2.0);
+            return vec2(-INF, INF);
         } else { // Only left
             return vec2(-INF, t1);
         }
     } else if (intersects_right) { // Only right
         return vec2(t1, INF);
     } else {
-        return vec2(2.0, 2.0);
+        return vec2(INF, INF);
     }
 }
 
@@ -136,25 +136,11 @@ bool tri_tri_intersect_custom(
     vec3 v2,
     out vec2 interval
 ) {
-    // Plane equation for occluding triangle: dot(n, x) + d = 0
-    vec3 e0 = v1 - v0;
-    vec3 e1 = v2 - v0;
-    vec3 n = cross(e0, e1);
-    float d = -dot(n, v0);
-
-    // Put light triangle into plane equation
-    float d_l0 = dot(n, l0) + d;
-    float d_l1 = dot(n, l1) + d;
-    float d_pos = dot(n, pos) + d;
-
-    // Same sign on all means they're on same side of plane
-    if (d_l0*d_l1 > 0.0 && d_l0*d_pos > 0.0) return false;
-
     // Plane equation for light triangle: dot(n, x) + d = 0
     vec3 L = l1 - l0;
-    e1 = pos - l0;
-    n = cross(L, e1);
-    d = -dot(n, l0);
+    vec3 edge = pos - l0;
+    vec3 n = cross(L, edge);
+    float d = -dot(n, l0);
 
     // Put triangle 1 into plane equation 2
     float dv0 = dot(n, v0) + d;
