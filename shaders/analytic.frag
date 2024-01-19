@@ -343,6 +343,14 @@ IntervalArray intersect_scene_top_bottom(vec3 pos, vec3 n, vec3 l0, vec3 l1) {
                         vec3 v1 = to_world(verts[acceleration_indices[i+1]].pos);
                         vec3 v2 = to_world(verts[acceleration_indices[i+2]].pos);
 
+                        // float r_0 = dot(n, v0 - pos);
+                        // float r_1 = dot(n, v1 - pos);
+                        // float r_2 = dot(n, v2 - pos);
+
+                        // if (r_0 < 0.0 && r_1 < 0.0 && r_2 < 0.0) {
+                        //     continue;
+                        // }
+
                         vec2 interval;
                         if (tri_tri_intersect_custom(l0,l1,pos+0.001*n, v0,v1,v2, interval)) {
                             occlude_intervals(int_arr, interval);
@@ -460,6 +468,21 @@ void main() {
     vec3 l0 = to_world(l0_ubo);
     vec3 l1 = to_world(l1_ubo);
     vec3 L = l1 - l0;
+
+
+    // A possible optimization, but didn't seem to confer any measurable benefit
+    // // If line-light intersects plane of the triangle, clamp it
+    // float clamp_t = dot(pos - l0, n) / dot(L, n);
+    // if (clamp_t >= 0.0 && clamp_t <= 1.0) {
+    //     if (dot(l0 - pos, n) > 0.0) {
+    //         I = clamp_t * I;
+    //         l1 = clamp_t * L + l0;
+    //     } else {
+    //         I = (1.0 - clamp_t) * I;
+    //         l0 = clamp_t * L + l0;
+    //     }
+    //     L = l1 - l0;
+    // }
 
     // IntervalArray int_arr = intersect_scene_brute(pos, n, l0, l1);
     IntervalArray int_arr = intersect_scene_top_bottom(pos, n, l0, l1);
