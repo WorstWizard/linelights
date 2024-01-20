@@ -132,6 +132,16 @@ impl Scene {
                 .expect("Not using proper version of clipping scene: Needs a 'Linelight' object."),
         }
     }
+    pub fn edge_case_check() -> Self {
+        let (vertices, indices, light) =
+            Scene::load_gltf_mesh("models/edge_case_check.glb");
+        Scene {
+            vertices,
+            indices,
+            light: light
+                .expect("Not using proper version of edge case scene: Needs a 'Linelight' object."),
+        }
+    }
 
     fn load_gltf_mesh(path: &str) -> (Vec<Vertex>, Vec<u32>, Option<LineSegment>) {
         let (doc, buffers, _) = gltf::import(path).unwrap();

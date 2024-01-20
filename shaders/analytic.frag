@@ -30,11 +30,8 @@ void sort(inout float a, inout float b) {
         b = c;
     }
 }
-float projected_sqr_dist_to_line(vec3 l0, vec3 l1, vec3 p) {
-    float x0, x1, x2, z0, z1, z2;
-    x0 = p.x; x1 = l0.x; x2 = l1.x;
-    z0 = p.z; z1 = l0.z; z2 = l1.z;
-    return abs( (x2-x1)*(z1-z0) - (z2-z1)*(x1-x0) );
+float dist_to_line_2d_unnormalized(vec2 p, vec2 v0, vec2 v1) {
+    return (v1.x - v0.x)*(v0.y - p.y) - (v1.y - v0.y)*(v0.x - p.x);
 }
 bool linesegments_intersect(vec2 p1, vec2 p2, vec2 p3, vec2 p4) {
     float a = p3.x-p4.x;
@@ -72,6 +69,8 @@ vec2 compute_intervals_custom(
     float dd1, // Product of signed distances of v0 and v1 to triangle l0,l1,pos
     float dd2 // Product of signed distances of v0 and v2 to triangle l0,l1,pos
 ) {
+    const float INF = 1e10;
+
     // Compute intersection points between triangle v0-v1-v2 and plane defined by dot(p - pos, n) = 0
     vec3 isect0, isect1;
     if (dd1 < 0.0) { // Line v1-v0 crosses plane
@@ -91,10 +90,12 @@ vec2 compute_intervals_custom(
 
     // It may occur that the intersection points are further away from the light than
     // the sampled point, in which case there is no occlusion
-    float dp = projected_sqr_dist_to_line(l0, l1, pos);
-    float di0 = projected_sqr_dist_to_line(l0, l1, isect0);
-    float di1 = projected_sqr_dist_to_line(l0, l1, isect1);
-    if (di0 > dp && di1 > dp) return vec2(2.0, 2.0); // arbitrary non-occluding interval
+    float dp = dist_to_line_2d_unnormalized(l0.xz, l1.xz, pos.xz);
+    float sign_of_dp = sign(dp);
+    dp = abs(dp);
+    float di0 = sign_of_dp * dist_to_line_2d_unnormalized(l0.xz, l1.xz, isect0.xz);
+    float di1 = sign_of_dp * dist_to_line_2d_unnormalized(l0.xz, l1.xz, isect1.xz);
+    if (di0 < 0.0 || di1 < 0.0 || (di0 > dp && di1 > dp)) return vec2(INF, INF); // arbitrary non-occluding interval
 
     t0 = line_line_intersect_2d(l0.xz,l1.xz,isect0.xz,pos.xz);
     t1 = line_line_intersect_2d(l0.xz,l1.xz,isect1.xz,pos.xz);
@@ -106,7 +107,6 @@ vec2 compute_intervals_custom(
 
     // If one intersection is further away from the line than the sampled point,
     // its corresponding t-value should be at infinity
-    const float INF = 1e10;
     // Let t1 correspond to the point closer than pos, t0 the more distant point
     // Ergo, t0 will be put at +/- infinity, while t1 is kept
     if (di1 >= dp) t1 = t0;
