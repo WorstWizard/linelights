@@ -85,8 +85,15 @@ vec2 compute_intervals_custom(
         line_plane_intersect(n, pos, v2 - v1, v1, isect1);
     }
 
-    // Project intersections onto line t*(l1-l0) + l0 by computation of t-values
-    float t0, t1, tmp1, tmp2;
+    // Intersection crosses the linelight
+    // if (di0*di1 < 0.0) {
+    //     float t = line_line_intersect_2d(l0.xz,l1.xz,isect0.xz,isect1.xz);
+    //     if (dot(n_tri, l1-l0) > 0.0) {
+    //         return vec2(-INF, t);
+    //     } else {
+    //         return vec2(t, INF);
+    //     }
+    // }
 
     // It may occur that the intersection points are further away from the light than
     // the sampled point, in which case there is no occlusion
@@ -97,6 +104,8 @@ vec2 compute_intervals_custom(
     float di1 = sign_of_dp * dist_to_line_2d_unnormalized(l0.xz, l1.xz, isect1.xz);
     if (di0 < 0.0 || di1 < 0.0 || (di0 > dp && di1 > dp)) return vec2(INF, INF); // arbitrary non-occluding interval
 
+    // Project intersections onto line t*(l1-l0) + l0 by computation of t-values
+    float t0, t1;
     t0 = line_line_intersect_2d(l0.xz,l1.xz,isect0.xz,pos.xz);
     t1 = line_line_intersect_2d(l0.xz,l1.xz,isect1.xz,pos.xz);
 
