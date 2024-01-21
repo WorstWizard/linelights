@@ -37,7 +37,7 @@ fn main() {
     
 
     println!("Loading model...");
-    let scene = Scene::dragon_small_light(32);
+    let scene = Scene::dragon_small_light(16);
     // let scene = Scene::sponza(32);
     // let mut scene = Scene::grating_test();
     // let scene = Scene::edge_case_check();

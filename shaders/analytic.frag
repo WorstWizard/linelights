@@ -311,6 +311,16 @@ IntervalArray intersect_scene_top_bottom(vec3 pos, vec3 n, vec3 l0, vec3 l1) {
     int_arr.size = 0;
     add_interval(int_arr, vec2(0.0,1.0));
 
+    vec3 l0_dir = normalize(l0 - pos);
+    vec3 l1_dir = normalize(l1 - pos);
+    float dot_0 = dot(n, l0_dir);
+    float dot_1 = dot(n, l1_dir);
+    if (dot_0 < 0.0 && dot_1 < 0.0) {
+        remove_interval(int_arr, 0);
+        return int_arr;
+    }
+    float alpha = max(0.0, min(dot_0, dot_1));
+
     // For each bounding box, test first if it intersects the light-triangle at all
     // bool early_out = false;
     int blas_index = 0;
@@ -342,6 +352,19 @@ IntervalArray intersect_scene_top_bottom(vec3 pos, vec3 n, vec3 l0, vec3 l1) {
                         vec3 v0 = to_world(verts[acceleration_indices[i]].pos);
                         vec3 v1 = to_world(verts[acceleration_indices[i+1]].pos);
                         vec3 v2 = to_world(verts[acceleration_indices[i+2]].pos);
+
+                        // vec3 tri_normal_0 = to_world(verts[acceleration_indices[i]].normal);
+                        // vec3 tri_normal_1 = to_world(verts[acceleration_indices[i+1]].normal);
+                        // vec3 tri_normal_2 = to_world(verts[acceleration_indices[i+2]].normal);
+                        // vec3 mean_vertex_norm = tri_normal_0 + tri_normal_1 + tri_normal_2;
+                        // vec3 face_normal = normalize(cross(v1-v0, v2-v0));
+
+
+                        vec3 face_normal = verts[acceleration_indices[i]].normal;
+                        float beta = 1.0 + dot(n, face_normal);
+
+                        // if (dot(mean_vertex_norm, face_normal) < 0.0) face_normal = -face_normal;
+                        if (alpha > beta) continue;
 
                         // float r_0 = dot(n, v0 - pos);
                         // float r_1 = dot(n, v1 - pos);
