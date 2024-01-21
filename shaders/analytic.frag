@@ -319,7 +319,7 @@ IntervalArray intersect_scene_top_bottom(vec3 pos, vec3 n, vec3 l0, vec3 l1) {
         remove_interval(int_arr, 0);
         return int_arr;
     }
-    float alpha = max(0.0, min(dot_0, dot_1));
+    // float alpha = max(0.0, min(dot_0, dot_1));
 
     // For each bounding box, test first if it intersects the light-triangle at all
     // bool early_out = false;
