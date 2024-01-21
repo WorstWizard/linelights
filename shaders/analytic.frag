@@ -360,11 +360,11 @@ IntervalArray intersect_scene_top_bottom(vec3 pos, vec3 n, vec3 l0, vec3 l1) {
                         // vec3 face_normal = normalize(cross(v1-v0, v2-v0));
 
 
-                        vec3 face_normal = verts[acceleration_indices[i]].normal;
-                        float beta = 1.0 + dot(n, face_normal);
+                        // vec3 face_normal = verts[acceleration_indices[i]].normal;
+                        // float beta = 1.0 + dot(n, face_normal);
 
-                        // if (dot(mean_vertex_norm, face_normal) < 0.0) face_normal = -face_normal;
-                        if (alpha > beta) continue;
+                        // // if (dot(mean_vertex_norm, face_normal) < 0.0) face_normal = -face_normal;
+                        // if (alpha > beta) continue;
 
                         // float r_0 = dot(n, v0 - pos);
                         // float r_1 = dot(n, v1 - pos);
