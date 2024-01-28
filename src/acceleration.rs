@@ -14,11 +14,13 @@ pub const GRID_SIZE_BOT: usize = 10;
 
 // Sets which accel struct is used. TLAS for top/bottom, GridAccel for bottom only
 // pub type AccelStruct = TLAS;
-pub type AccelStruct = GridAccel;
+// pub type AccelStruct = GridAccel;
+pub type AccelStruct = NoAccel;
 pub fn build_acceleration_structure(scene: &Scene) -> (AccelStruct, Vec<u32>) {
     print!("Building acceleration structure...");
     // build_top_bottom_grid(scene)
-    build_grid_structure(scene)
+    // build_grid_structure(scene)
+    build_no_structure(scene)
 }
 
 pub const BBOX_COUNT_TOP: usize = GRID_SIZE_TOP*GRID_SIZE_TOP*GRID_SIZE_TOP;
@@ -316,6 +318,15 @@ fn build_grid_structure(scene: &Scene) -> (GridAccel, Vec<u32>) {
     // Construct blas
     let blas = build_blas(&scene, &mut index_buffer, origin, size);
     (GridAccel { size, origin, grid: blas }, index_buffer)
+}
+
+#[repr(C)]
+#[derive(Default)]
+pub struct NoAccel {
+    _empty_data: i32
+}
+fn build_no_structure(scene: &Scene) -> (NoAccel, Vec<u32>) {
+    (NoAccel::default(), scene.indices.clone())
 }
 
 

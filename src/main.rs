@@ -27,7 +27,7 @@ fn main() {
     let _client = tracy_client::Client::start();
     let _span = span!("init");
 
-    let analytic_shader = linelight_vk::make_shaders("shaders/simple_shader.vert", "shaders/analytic_grid.frag", true);
+    let analytic_shader = linelight_vk::make_shaders("shaders/simple_shader.vert", "shaders/analytic_brute.frag", true);
     let stochastic_shader = linelight_vk::make_shaders("shaders/simple_shader.vert", "shaders/stochastic.frag", true);
     let debug_shader = linelight_vk::make_shaders("shaders/simple_shader.vert", "shaders/debug.frag", true);
 
@@ -74,7 +74,7 @@ fn main() {
 
     let mut current_frame = 0;
     let mut timer = std::time::Instant::now();
-    
+
     if ENABLE_DEBUG {
         unsafe {
             write_struct_to_buffer(
@@ -566,10 +566,12 @@ fn update_debug_overlay(
         // debug_overlay.occluding_tris = [scene.light; 3 * 7];
         // debug_overlay.intersections = [scene.light; 2 * ARR_MAX];
 
-        let point = point + 0.005 * normal.normalize();
-        let l0 = scene.light.0;
-        let l1 = scene.light.1;
+        // let point = point + 0.005 * normal.normalize();
+        // let l0 = scene.light.0;
+        // let l1 = scene.light.1;
 
+
+        
         // Draw normal of clicked point
         // debug_overlay.normal = LineSegment(point, point + normal.normalize());
 
@@ -584,50 +586,59 @@ fn update_debug_overlay(
         // } else {
         //     debug_overlay.tri_e1 = LineSegment(point, l1);
         // }
-        use acceleration::{GRID_SIZE_TOP, GRID_SIZE_BOT};
 
-        debug_overlay.light_triangle[1] = LineSegment(l0, point);
-        debug_overlay.light_triangle[2] = LineSegment(l1, point);
-        debug_overlay.boxes = [WireframeBox::default(); MAX_DEBUG_BOXES];
 
-        let blas_size = accel_struct.size / (GRID_SIZE_TOP as f32);
-        let bbox_size = blas_size / (GRID_SIZE_BOT as f32);
 
-        let pc_blas = tri_aabb_precompute(l0, l1, point, blas_size);
-        let pc_bbox = tri_aabb_precompute(l0, l1, point, bbox_size);
+        // Box Visualization
+        // use acceleration::{GRID_SIZE_TOP, GRID_SIZE_BOT};
 
-        let mut hit_boxes = 0;
-        for i in 0..GRID_SIZE_TOP {
-        for j in 0..GRID_SIZE_TOP {
-        for k in 0..GRID_SIZE_TOP {
-            let ijk = vec3(i as f32, j as f32, k as f32);
-            let blas_origin = accel_struct.origin + ijk * blas_size;
+        // debug_overlay.light_triangle[1] = LineSegment(l0, point);
+        // debug_overlay.light_triangle[2] = LineSegment(l1, point);
+        // debug_overlay.boxes = [WireframeBox::default(); MAX_DEBUG_BOXES];
 
-            if hit_boxes < MAX_DEBUG_BOXES && precomputed_tri_aabb_intersect(&pc_blas, blas_origin) {
-                debug_overlay.boxes[hit_boxes] = WireframeBox::aabb(blas_origin, blas_origin + blas_size);
-                hit_boxes += 1;
-            }
-            // if hit_boxes < MAX_DEBUG_BOXES && ray_aabb_intersect(point, (l0-point).normalize(), blas_origin, blas_size) {
-            //     debug_overlay.boxes[hit_boxes] = WireframeBox::aabb(blas_origin, blas_origin + blas_size);
-            //     hit_boxes += 1;
-            // }
+        // let blas_size = accel_struct.size / (GRID_SIZE_TOP as f32);
+        // let bbox_size = blas_size / (GRID_SIZE_BOT as f32);
 
-            for ii in 0..GRID_SIZE_BOT {
-            for jj in 0..GRID_SIZE_BOT {
-            for kk in 0..GRID_SIZE_BOT {
-                let ijk = vec3(ii as f32, jj as f32, kk as f32);
-                let bbox_origin = blas_origin + ijk * bbox_size;
+        // let pc_blas = tri_aabb_precompute(l0, l1, point, blas_size);
+        // let pc_bbox = tri_aabb_precompute(l0, l1, point, bbox_size);
 
-                if hit_boxes < MAX_DEBUG_BOXES && precomputed_tri_aabb_intersect(&pc_bbox, bbox_origin) {
-                    debug_overlay.boxes[hit_boxes] = WireframeBox::aabb(bbox_origin, bbox_origin + bbox_size);
-                    hit_boxes += 1;
-                }
-                // if hit_boxes < MAX_DEBUG_BOXES && ray_aabb_intersect(point, (l0-point).normalize(), bbox_origin, bbox_size) {
-                //     debug_overlay.boxes[hit_boxes] = WireframeBox::aabb(bbox_origin, bbox_origin + bbox_size);
-                //     hit_boxes += 1;
-                // }
-            }}}
-        }}}
+        // let mut hit_boxes = 0;
+        // for i in 0..GRID_SIZE_TOP {
+        // for j in 0..GRID_SIZE_TOP {
+        // for k in 0..GRID_SIZE_TOP {
+        //     let ijk = vec3(i as f32, j as f32, k as f32);
+        //     let blas_origin = accel_struct.origin + ijk * blas_size;
+
+        //     if hit_boxes < MAX_DEBUG_BOXES && precomputed_tri_aabb_intersect(&pc_blas, blas_origin) {
+        //         debug_overlay.boxes[hit_boxes] = WireframeBox::aabb(blas_origin, blas_origin + blas_size);
+        //         hit_boxes += 1;
+        //     }
+        //     // if hit_boxes < MAX_DEBUG_BOXES && ray_aabb_intersect(point, (l0-point).normalize(), blas_origin, blas_size) {
+        //     //     debug_overlay.boxes[hit_boxes] = WireframeBox::aabb(blas_origin, blas_origin + blas_size);
+        //     //     hit_boxes += 1;
+        //     // }
+
+        //     for ii in 0..GRID_SIZE_BOT {
+        //     for jj in 0..GRID_SIZE_BOT {
+        //     for kk in 0..GRID_SIZE_BOT {
+        //         let ijk = vec3(ii as f32, jj as f32, kk as f32);
+        //         let bbox_origin = blas_origin + ijk * bbox_size;
+
+        //         if hit_boxes < MAX_DEBUG_BOXES && precomputed_tri_aabb_intersect(&pc_bbox, bbox_origin) {
+        //             debug_overlay.boxes[hit_boxes] = WireframeBox::aabb(bbox_origin, bbox_origin + bbox_size);
+        //             hit_boxes += 1;
+        //         }
+        //         // if hit_boxes < MAX_DEBUG_BOXES && ray_aabb_intersect(point, (l0-point).normalize(), bbox_origin, bbox_size) {
+        //         //     debug_overlay.boxes[hit_boxes] = WireframeBox::aabb(bbox_origin, bbox_origin + bbox_size);
+        //         //     hit_boxes += 1;
+        //         // }
+        //     }}}
+        // }}}
+
+
+
+
+
 
         // let mut int_arr = IntervalArray {
         //     size: 0,
