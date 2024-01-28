@@ -40,6 +40,7 @@ struct BufferView {
     int size;
 };
 struct BLAS {
+    // uvec2 mask;
     BufferView buffer_views[BBOX_COUNT];
 };
 struct TLAS {

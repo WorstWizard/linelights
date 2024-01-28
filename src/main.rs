@@ -19,7 +19,7 @@ use input_handling::*;
 
 // Some config options
 const SPEED: f32 = 1.0;
-const ENABLE_DEBUG: bool = true;
+const ENABLE_DEBUG: bool = false;
 
 
 fn main() {
@@ -37,11 +37,25 @@ fn main() {
     
 
     println!("Loading model...");
-    let scene = Scene::dragon_small_light(4);
-    // let scene = Scene::sponza(32);
-    // let mut scene = Scene::grating_test();
+
+
+
+    // let scene = Scene::dragon(64);
+    let scene = Scene::dragon_small_light(16);
+    // let scene = Scene::sponza(2);
+    // let scene = Scene::clipping_test();
     // let scene = Scene::edge_case_check();
+
+    // let mut scene = Scene::grating_test();
     // scene.light.1 = scene.light.0.lerp(scene.light.1, 64.0/64.0);
+
+
+    let mut inputs = Inputs::default();
+    // Temporary: To measure stochastic shader more conveniently:
+    inputs.selected_shader = 1; // 0 = analytic, 1 = stochastic
+
+
+
     let (accel_struct, accel_indices) =
         acceleration::build_acceleration_structure(&scene);
 
@@ -69,10 +83,6 @@ fn main() {
         );
     }
 
-    let mut inputs = Inputs::default();
-    // Temporary: To measure stochastic shader more conveniently:
-    // inputs.selected_shader = 1;
-
     let mut just_took_screenshot = false; // Helper variable to ensure only one is taken per keypress
     let mut just_printed_info = false;
     let light_wiggle = false;
@@ -90,6 +100,11 @@ fn main() {
     // camera.eye = vec3(0.0, -0.6, 1.0);
     // camera.rotate(0.1, 0.0);
 
+    // Settings for sponza
+    // camera.eye = vec3(-3.4390063, -3.7481122, 0.64643747);
+    // camera.rotate(0.36471802, -1.0740021);
+
+    // Settings for da dragon
     camera.eye = vec3(-1.3054297, -2.1971848, -4.514163);
     camera.rotate(0.3527179, -2.8560042);
 

@@ -90,7 +90,7 @@ float rand_pcg() {
     return float(n) * (1.0/float(0xffffffffU));
 }
 
-const int NUM_SAMPLES = 4;
+const int NUM_SAMPLES = 8;
 float sample_line_light_stochastic(vec3 pos, vec3 n, vec3 l0, vec3 l1, float I) {
     vec3 l = l1 - l0;
 
@@ -101,7 +101,7 @@ float sample_line_light_stochastic(vec3 pos, vec3 n, vec3 l0, vec3 l1, float I) 
     float irr = 0.0;
     float strat_len = 1.0/float(NUM_SAMPLES);
     for (int i = 0; i < NUM_SAMPLES; i++) {
-    float t = rand_pcg();
+        float t = rand_pcg();
         vec3 target = l0 + l*strat_len*(i + t);
         vec3 origin = pos + 0.001*n;
         vec3 dir = target - origin;

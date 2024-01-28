@@ -174,7 +174,7 @@ bool tri_tri_intersect_custom(
 }
 
 // Records info on which parts of a linelight is visible as an array of intervals (t-values in [0,1])
-const int ARR_MAX = 32;
+const int ARR_MAX = 64;
 struct IntervalArray {
     int size;
     int operations;
@@ -314,11 +314,11 @@ void main() {
     vec3 l1 = to_world(l1_ubo);
     vec3 L = l1 - l0;
 
-    vec3 l0_dir = normalize(l0 - pos);
-    vec3 l1_dir = normalize(l1 - pos);
-    float dot_0 = dot(n, l0_dir);
-    float dot_1 = dot(n, l1_dir);
-    float alpha = max(0.0, min(dot_0, dot_1));
+    // vec3 l0_dir = normalize(l0 - pos);
+    // vec3 l1_dir = normalize(l1 - pos);
+    // float dot_0 = dot(n, l0_dir);
+    // float dot_1 = dot(n, l1_dir);
+    // float alpha = max(0.0, min(dot_0, dot_1));
 
     // Precompute AABB grid intermediate values for fast intersection
     vec3 blas_size = accel_struct.size / float(GRID_SIZE);
@@ -366,9 +366,9 @@ void main() {
                         vec3 v1 = to_world(verts[acceleration_indices[i+1]].pos);
                         vec3 v2 = to_world(verts[acceleration_indices[i+2]].pos);
 
-                        vec3 face_normal = normalize(to_world(verts[acceleration_indices[i]].normal));
-                        float beta = 1.0 + dot(n, face_normal);
-                        if (alpha > beta) continue;
+                        // vec3 face_normal = normalize(to_world(verts[acceleration_indices[i]].normal));
+                        // float beta = 1.0 + dot(n, face_normal);
+                        // if (alpha > beta) continue;
 
                         vec2 interval;
                         if (tri_tri_intersect_custom(l0,l1,pos+0.001*n, v0,v1,v2, interval)) {
@@ -392,14 +392,23 @@ void main() {
     //     irr += sample_line_light_analytic(pos, n, p0, p1, fraction_of_light);
     // }
     // int max_ops = 40;
-    vec3 color;
-    if (int_arr.hit_max) {
-        color = vec3(0.0,1.0,0.0);
-    } else {
-        // color = heatmap(float(int_arr.operations) / float(max_ops));
-        color = heatmap(float(int_arr.highest_int_count) / float(ARR_MAX));
-    }
+
+
+    // vec3 color;
+    // if (int_arr.hit_max) {
+    //     color = vec3(0.0,1.0,0.0);
+    // } else {
+    //     // color = heatmap(float(int_arr.operations) / float(max_ops));
+    //     color = heatmap(float(int_arr.highest_int_count) / float(ARR_MAX));
+    // }
     
+    vec3 color = vec3(0.5);
+    if (int_arr.size == 0) color = vec3(0.2);
+    if (int_arr.size == 1 && int_arr.data[0] == vec2(0.0,1.0)) color = vec3(1.0);
+
+
+
+
     // vec3 color = 1.0 - exp(-irr * vec3(1.0) - ambient);
 
     // Fix color banding by adding noise: https://pixelmager.github.io/linelight/banding.html

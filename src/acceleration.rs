@@ -153,6 +153,7 @@ pub struct BufferView {
 #[derive(Clone, Debug)]
 #[repr(C)]
 pub struct BLAS {
+    // mask: u64,
     buffer_views: [BufferView; BBOX_COUNT],
 }
 #[repr(C)]
@@ -219,6 +220,7 @@ pub fn build_acceleration_structure(scene: &Scene) -> (TLAS, Vec<u32>) {
 
 fn build_blas(scene: &Scene, index_buffer: &mut Vec<u32>, origin: Vec3, size: Vec3) -> BLAS {
     let bbox_size = size/(GRID_SIZE as f32);
+    // let mut mask = 0;
     let mut buffer_views = Vec::with_capacity(BBOX_COUNT);
     for i in 0..GRID_SIZE {
         for j in 0..GRID_SIZE {
@@ -237,12 +239,17 @@ fn build_blas(scene: &Scene, index_buffer: &mut Vec<u32>, origin: Vec3, size: Ve
                     }
                 }
                 let length_after = index_buffer.len();
+                let size = length_after-length_before;
+                // if size > 0 {
+                //     mask |= 1 << buffer_views.len();
+                // }
                 buffer_views.push(
-                    BufferView { offset: length_before as i32, size: (length_after-length_before) as i32 }
+                    BufferView { offset: length_before as i32, size: size as i32 }
                 )
             }
         }
     }
+    // BLAS { mask, buffer_views: buffer_views.try_into().unwrap() }
     BLAS { buffer_views: buffer_views.try_into().unwrap() }
 }
 

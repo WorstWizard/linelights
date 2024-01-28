@@ -336,6 +336,9 @@ IntervalArray intersect_scene_top_bottom(vec3 pos, vec3 n, vec3 l0, vec3 l1) {
     for (int blas_i=0; blas_i<GRID_SIZE; blas_i++) {
     for (int blas_j=0; blas_j<GRID_SIZE; blas_j++) {
     for (int blas_k=0; blas_k<GRID_SIZE; blas_k++) {
+        // uvec2 blas_mask = accel_struct.subgrids[blas_index].mask;
+        // if (blas_mask == uvec2(0,0)) continue;
+
         vec3 ijk = vec3(blas_i, blas_j, blas_k);
         vec3 blas_origin = accel_struct.origin + ijk * blas_size;
 
@@ -349,10 +352,11 @@ IntervalArray intersect_scene_top_bottom(vec3 pos, vec3 n, vec3 l0, vec3 l1) {
                 vec3 ijk = vec3(bbox_i, bbox_j, bbox_k);
                 vec3 bbox_origin = blas_origin + ijk * bbox_size;
 
-                if (tri_aabb_intersect(bbox_precompute, bbox_origin)) {
+                // if ((accel_struct.subgrids[blas_index].mask & (1 << bbox_index)) != uvec2(0,0)) continue;
 
+                if (tri_aabb_intersect(bbox_precompute, bbox_origin)) {
                     BufferView buffer_view = accel_struct.subgrids[blas_index].buffer_views[bbox_index];
-                    
+
                     // For each triangle, compute whether it could occlude the linelight, if so, update intervals
                     for (int i = buffer_view.offset; i < buffer_view.offset+buffer_view.size; i += 3) {
                         // if (int_arr.size == 0) early_out = true; // Early stop
@@ -503,18 +507,18 @@ void main() {
 
 
     // A possible optimization, but didn't seem to confer any measurable benefit
-    // // If line-light intersects plane of the triangle, clamp it
-    // float clamp_t = dot(pos - l0, n) / dot(L, n);
-    // if (clamp_t >= 0.0 && clamp_t <= 1.0) {
-    //     if (dot(l0 - pos, n) > 0.0) {
-    //         I = clamp_t * I;
-    //         l1 = clamp_t * L + l0;
-    //     } else {
-    //         I = (1.0 - clamp_t) * I;
-    //         l0 = clamp_t * L + l0;
-    //     }
-    //     L = l1 - l0;
-    // }
+    // If line-light intersects plane of the triangle, clamp it
+    float clamp_t = dot(pos - l0, n) / dot(L, n);
+    if (clamp_t >= 0.0 && clamp_t <= 1.0) {
+        if (dot(l0 - pos, n) > 0.0) {
+            I = clamp_t * I;
+            l1 = clamp_t * L + l0;
+        } else {
+            I = (1.0 - clamp_t) * I;
+            l0 = clamp_t * L + l0;
+        }
+        L = l1 - l0;
+    }
 
     // IntervalArray int_arr = intersect_scene_brute(pos, n, l0, l1);
     IntervalArray int_arr = intersect_scene_top_bottom(pos, n, l0, l1);
