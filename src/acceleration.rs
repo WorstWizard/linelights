@@ -2,6 +2,36 @@ use glam::{vec2, vec3, Vec2, Vec3, Vec3Swizzles};
 
 use crate::scene_loading::Scene;
 
+
+
+
+// Make sure to mirror changes to the shaders!!!
+// Grid sizes are defined in predule.frag, the acceleration structure requires a change of shader file
+
+// Sets grid sizes for top/bottom grid as well as bottom-only.
+pub const GRID_SIZE_TOP: usize = 4;
+pub const GRID_SIZE_BOT: usize = 10;
+
+// Sets which accel struct is used. TLAS for top/bottom, GridAccel for bottom only
+// pub type AccelStruct = TLAS;
+pub type AccelStruct = GridAccel;
+pub fn build_acceleration_structure(scene: &Scene) -> (AccelStruct, Vec<u32>) {
+    print!("Building acceleration structure...");
+    // build_top_bottom_grid(scene)
+    build_grid_structure(scene)
+}
+
+pub const BBOX_COUNT_TOP: usize = GRID_SIZE_TOP*GRID_SIZE_TOP*GRID_SIZE_TOP;
+pub const BBOX_COUNT_BOT: usize = GRID_SIZE_BOT*GRID_SIZE_BOT*GRID_SIZE_BOT;
+
+
+
+
+
+
+
+
+
 // Schwarz 2010
 pub fn tri_aabb_intersect(v0: Vec3, v1: Vec3, v2: Vec3, p: Vec3, d_p: Vec3) -> bool {
     let precompute = tri_aabb_precompute(v0, v1, v2, d_p);
@@ -141,9 +171,6 @@ pub fn precomputed_tri_aabb_intersect(precompute: &PrecomputedVals, p: Vec3) -> 
     }
 }
 
-pub type AccelStruct = TLAS;
-pub const GRID_SIZE: usize = 4;
-pub const BBOX_COUNT: usize = GRID_SIZE*GRID_SIZE*GRID_SIZE;
 #[repr(C)]
 #[derive(Clone, Copy, Default, Debug)]
 pub struct BufferView {
@@ -154,18 +181,16 @@ pub struct BufferView {
 #[repr(C)]
 pub struct BLAS {
     // mask: u64,
-    buffer_views: [BufferView; BBOX_COUNT],
+    buffer_views: [BufferView; BBOX_COUNT_BOT],
 }
 #[repr(C)]
 pub struct TLAS {
     pub size: Vec3,
     pub origin: Vec3,
-    subgrids: [BLAS; BBOX_COUNT]
+    subgrids: [BLAS; BBOX_COUNT_TOP]
 }
-
-pub fn build_acceleration_structure(scene: &Scene) -> (TLAS, Vec<u32>) {
+pub fn build_top_bottom_grid(scene: &Scene) -> (TLAS, Vec<u32>) {
     use std::{time::Instant, io::{stdout, Write}};
-    print!("Building acceleration structure...");
     stdout().flush().unwrap();
 
     let scene_aabb = {
@@ -193,17 +218,17 @@ pub fn build_acceleration_structure(scene: &Scene) -> (TLAS, Vec<u32>) {
 
     let size = scene_aabb.1 - scene_aabb.0;
     let origin = scene_aabb.0;
-    let mut subgrids: Vec<BLAS> = Vec::with_capacity(BBOX_COUNT);
+    let mut subgrids: Vec<BLAS> = Vec::with_capacity(BBOX_COUNT_TOP);
     let mut index_buffer = Vec::new();
     
     // Construct grid of BLAS's
     let mut timer = Instant::now();
-    let blas_size = size/(GRID_SIZE as f32);
-    for i in 0..GRID_SIZE {
-        for j in 0..GRID_SIZE {
-            for k in 0..GRID_SIZE {
+    let blas_size = size/(GRID_SIZE_TOP as f32);
+    for i in 0..GRID_SIZE_TOP {
+        for j in 0..GRID_SIZE_TOP {
+            for k in 0..GRID_SIZE_TOP {
                 if timer.elapsed().as_secs_f32() > 1.0 {
-                    print!(" {}/{}...", subgrids.len(), BBOX_COUNT);
+                    print!(" {}/{}...", subgrids.len(), BBOX_COUNT_TOP);
                     stdout().flush().unwrap();
                     timer = Instant::now()
                 }
@@ -219,12 +244,12 @@ pub fn build_acceleration_structure(scene: &Scene) -> (TLAS, Vec<u32>) {
 }
 
 fn build_blas(scene: &Scene, index_buffer: &mut Vec<u32>, origin: Vec3, size: Vec3) -> BLAS {
-    let bbox_size = size/(GRID_SIZE as f32);
+    let bbox_size = size/(GRID_SIZE_BOT as f32);
     // let mut mask = 0;
-    let mut buffer_views = Vec::with_capacity(BBOX_COUNT);
-    for i in 0..GRID_SIZE {
-        for j in 0..GRID_SIZE {
-            for k in 0..GRID_SIZE {
+    let mut buffer_views = Vec::with_capacity(BBOX_COUNT_BOT);
+    for i in 0..GRID_SIZE_BOT {
+        for j in 0..GRID_SIZE_BOT {
+            for k in 0..GRID_SIZE_BOT {
                 let ijk = vec3(i as f32, j as f32, k as f32);
                 let bbox_origin = origin + ijk * bbox_size;
                 let length_before = index_buffer.len();
@@ -251,6 +276,46 @@ fn build_blas(scene: &Scene, index_buffer: &mut Vec<u32>, origin: Vec3, size: Ve
     }
     // BLAS { mask, buffer_views: buffer_views.try_into().unwrap() }
     BLAS { buffer_views: buffer_views.try_into().unwrap() }
+}
+
+
+#[repr(C)]
+pub struct GridAccel {
+    pub size: Vec3,
+    pub origin: Vec3,
+    grid: BLAS,
+}
+fn build_grid_structure(scene: &Scene) -> (GridAccel, Vec<u32>) {
+    let scene_aabb = {
+        let mut min = scene.vertices[0].position;
+        let mut max = min;
+        for pos in scene.vertices.iter().map(|v| v.position) {
+            if pos.x < min.x {
+                min.x = pos.x
+            } else if pos.x > max.x {
+                max.x = pos.x
+            }
+            if pos.y < min.y {
+                min.y = pos.y
+            } else if pos.y > max.y {
+                max.y = pos.y
+            }
+            if pos.z < min.z {
+                min.z = pos.z
+            } else if pos.z > max.z {
+                max.z = pos.z
+            }
+        }
+        (min - Vec3::splat(0.1), max + Vec3::splat(0.1))
+    };
+
+    let size = scene_aabb.1 - scene_aabb.0;
+    let origin = scene_aabb.0;
+    let mut index_buffer = Vec::new();
+    
+    // Construct blas
+    let blas = build_blas(&scene, &mut index_buffer, origin, size);
+    (GridAccel { size, origin, grid: blas }, index_buffer)
 }
 
 

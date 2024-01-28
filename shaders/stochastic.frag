@@ -1,3 +1,7 @@
+layout(scalar, binding = 1) uniform accelerationStructure {
+    TLAS accel_struct;
+};
+
 struct Ray {
     vec3 origin;
     vec3 direction;
@@ -95,8 +99,8 @@ float sample_line_light_stochastic(vec3 pos, vec3 n, vec3 l0, vec3 l1, float I) 
     vec3 l = l1 - l0;
 
     // Precompute AABB grid intermediate values for fast intersection
-    vec3 blas_size = accel_struct.size / float(GRID_SIZE);
-    vec3 bbox_size = blas_size / float(GRID_SIZE);
+    vec3 blas_size = accel_struct.size / float(GRID_SIZE_TOP);
+    vec3 bbox_size = blas_size / float(GRID_SIZE_BOT);
 
     float irr = 0.0;
     float strat_len = 1.0/float(NUM_SAMPLES);
@@ -114,18 +118,18 @@ float sample_line_light_stochastic(vec3 pos, vec3 n, vec3 l0, vec3 l1, float I) 
         r.hit = false;
 
         int blas_index = 0;
-        for (int blas_i=0; blas_i<GRID_SIZE; blas_i++) {
-        for (int blas_j=0; blas_j<GRID_SIZE; blas_j++) {
-        for (int blas_k=0; blas_k<GRID_SIZE; blas_k++) {
+        for (int blas_i=0; blas_i<GRID_SIZE_TOP; blas_i++) {
+        for (int blas_j=0; blas_j<GRID_SIZE_TOP; blas_j++) {
+        for (int blas_k=0; blas_k<GRID_SIZE_TOP; blas_k++) {
             if (r.hit) break;
             vec3 ijk = vec3(blas_i, blas_j, blas_k);
             vec3 blas_origin = accel_struct.origin + ijk * blas_size;
 
             if (ray_aabb_intersect(r, to_world(blas_origin), to_world(blas_origin + blas_size))) {
                 int bbox_index = 0;
-                for (int bbox_i=0; bbox_i<GRID_SIZE; bbox_i++) {
-                for (int bbox_j=0; bbox_j<GRID_SIZE; bbox_j++) {
-                for (int bbox_k=0; bbox_k<GRID_SIZE; bbox_k++) {
+                for (int bbox_i=0; bbox_i<GRID_SIZE_BOT; bbox_i++) {
+                for (int bbox_j=0; bbox_j<GRID_SIZE_BOT; bbox_j++) {
+                for (int bbox_k=0; bbox_k<GRID_SIZE_BOT; bbox_k++) {
                     vec3 ijk = vec3(bbox_i, bbox_j, bbox_k);
                     vec3 bbox_origin = blas_origin + ijk * bbox_size;
 

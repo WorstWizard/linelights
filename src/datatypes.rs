@@ -51,8 +51,8 @@ impl Camera {
     }
 }
 
-use crate::acceleration::BBOX_COUNT;
-pub const MAX_DEBUG_BOXES: usize = BBOX_COUNT*BBOX_COUNT;
+use crate::acceleration::{BBOX_COUNT_TOP, BBOX_COUNT_BOT};
+pub const MAX_DEBUG_BOXES: usize = 128;
 #[repr(C)]
 pub struct DebugOverlay {
     pub light_triangle: [LineSegment; 3],

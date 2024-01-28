@@ -1,5 +1,5 @@
 layout(scalar, binding = 1) uniform accelerationStructure {
-    TLAS accel_struct;
+    GridAccel accel_struct;
 };
 
 float sample_line_light_analytic(vec3 pos, vec3 n, vec3 l0, vec3 l1, float I) {
@@ -34,11 +34,8 @@ void sort(inout float a, inout float b) {
         b = c;
     }
 }
-float projected_sqr_dist_to_line(vec3 l0, vec3 l1, vec3 p) {
-    float x0, x1, x2, z0, z1, z2;
-    x0 = p.x; x1 = l0.x; x2 = l1.x;
-    z0 = p.z; z1 = l0.z; z2 = l1.z;
-    return abs( (x2-x1)*(z1-z0) - (z2-z1)*(x1-x0) );
+float dist_to_line_2d_unnormalized(vec2 p, vec2 v0, vec2 v1) {
+    return (v1.x - v0.x)*(v0.y - p.y) - (v1.y - v0.y)*(v0.x - p.x);
 }
 bool linesegments_intersect(vec2 p1, vec2 p2, vec2 p3, vec2 p4) {
     float a = p3.x-p4.x;
@@ -76,6 +73,8 @@ vec2 compute_intervals_custom(
     float dd1, // Product of signed distances of v0 and v1 to triangle l0,l1,pos
     float dd2 // Product of signed distances of v0 and v2 to triangle l0,l1,pos
 ) {
+    const float INF = 1e10;
+
     // Compute intersection points between triangle v0-v1-v2 and plane defined by dot(p - pos, n) = 0
     vec3 isect0, isect1;
     if (dd1 < 0.0) { // Line v1-v0 crosses plane
@@ -90,16 +89,27 @@ vec2 compute_intervals_custom(
         line_plane_intersect(n, pos, v2 - v1, v1, isect1);
     }
 
-    // Project intersections onto line t*(l1-l0) + l0 by computation of t-values
-    float t0, t1, tmp1, tmp2;
+    // Intersection crosses the linelight
+    // if (di0*di1 < 0.0) {
+    //     float t = line_line_intersect_2d(l0.xz,l1.xz,isect0.xz,isect1.xz);
+    //     if (dot(n_tri, l1-l0) > 0.0) {
+    //         return vec2(-INF, t);
+    //     } else {
+    //         return vec2(t, INF);
+    //     }
+    // }
 
     // It may occur that the intersection points are further away from the light than
     // the sampled point, in which case there is no occlusion
-    float dp = projected_sqr_dist_to_line(l0, l1, pos);
-    float di0 = projected_sqr_dist_to_line(l0, l1, isect0);
-    float di1 = projected_sqr_dist_to_line(l0, l1, isect1);
-    if (di0 > dp && di1 > dp) return vec2(2.0, 2.0); // arbitrary non-occluding interval
+    float dp = dist_to_line_2d_unnormalized(l0.xz, l1.xz, pos.xz);
+    float sign_of_dp = sign(dp);
+    dp = abs(dp);
+    float di0 = sign_of_dp * dist_to_line_2d_unnormalized(l0.xz, l1.xz, isect0.xz);
+    float di1 = sign_of_dp * dist_to_line_2d_unnormalized(l0.xz, l1.xz, isect1.xz);
+    if (di0 < 0.0 || di1 < 0.0 || (di0 > dp && di1 > dp)) return vec2(INF, INF); // arbitrary non-occluding interval
 
+    // Project intersections onto line t*(l1-l0) + l0 by computation of t-values
+    float t0, t1;
     t0 = line_line_intersect_2d(l0.xz,l1.xz,isect0.xz,pos.xz);
     t1 = line_line_intersect_2d(l0.xz,l1.xz,isect1.xz,pos.xz);
 
@@ -110,7 +120,6 @@ vec2 compute_intervals_custom(
 
     // If one intersection is further away from the line than the sampled point,
     // its corresponding t-value should be at infinity
-    const float INF = 1e10;
     // Let t1 correspond to the point closer than pos, t0 the more distant point
     // Ergo, t0 will be put at +/- infinity, while t1 is kept
     if (di1 >= dp) t1 = t0;
@@ -119,14 +128,14 @@ vec2 compute_intervals_custom(
     bool intersects_right = linesegments_intersect(l1.xz,pos.xz,isect0.xz,isect1.xz);
     if (intersects_left) {
         if (intersects_right) { // Both
-            return vec2(-1.0, 2.0);
+            return vec2(-INF, INF);
         } else { // Only left
             return vec2(-INF, t1);
         }
     } else if (intersects_right) { // Only right
         return vec2(t1, INF);
     } else {
-        return vec2(2.0, 2.0);
+        return vec2(INF, INF);
     }
 }
 
@@ -178,34 +187,25 @@ bool tri_tri_intersect_custom(
 }
 
 // Records info on which parts of a linelight is visible as an array of intervals (t-values in [0,1])
-const int ARR_MAX = 64;
+const int ARR_MAX = 32;
 struct IntervalArray {
     int size;
-    int operations;
-    int highest_int_count;
-    bool hit_max;
     vec2[ARR_MAX] data;
 };
 // No bounds checking for speed, just don't make mistakes ;)
 void remove_interval(inout IntervalArray int_arr, int i) {
-    int_arr.operations++;
     vec2 last_interval = int_arr.data[int_arr.size - 1];
     int_arr.data[i] = last_interval;
     int_arr.size--;
 }
 void add_interval(inout IntervalArray int_arr, vec2 new_interval) {
-    int_arr.operations++;
-    if (int_arr.size == ARR_MAX) { // Avoid overflow
-        int_arr.hit_max = true;
-    } else { 
+    if (int_arr.size < ARR_MAX) { // Avoid overflow
         int_arr.data[int_arr.size] = new_interval;
         int_arr.size++;
-        int_arr.highest_int_count = max(int_arr.size, int_arr.highest_int_count);
     }
 }
 // Given an interval of occlusion, update the array to reflect the new visible intervals
 void occlude_intervals(inout IntervalArray int_arr, vec2 occ_int) {
-    int_arr.operations++;
     for (int i=0; i < int_arr.size; i++) {
         vec2 interval = int_arr.data[i];
         
@@ -307,8 +307,89 @@ bool tri_aabb_intersect(PrecomputeVals pc, vec3 bbox_pos) {
            projected_normal_check(pc.pn_2, bbox_pos);
 }
 
+
+
+
+
+
+IntervalArray intersect_scene_grid(vec3 pos, vec3 n, vec3 l0, vec3 l1) {
+    // Precompute AABB grid intermediate values for fast intersection
+    vec3 bbox_size = accel_struct.size / float(GRID_SIZE_BOT);
+    PrecomputeVals bbox_precompute = tri_aabb_precompute(l0_ubo.xyz, l1_ubo.xyz, inPos, bbox_size);
+
+    // Initialize interval array
+    IntervalArray int_arr;
+    int_arr.size = 0;
+    add_interval(int_arr, vec2(0.0,1.0));
+
+    vec3 l0_dir = normalize(l0 - pos);
+    vec3 l1_dir = normalize(l1 - pos);
+    float dot_0 = dot(n, l0_dir);
+    float dot_1 = dot(n, l1_dir);
+    if (dot_0 < 0.0 && dot_1 < 0.0) {
+        remove_interval(int_arr, 0);
+        return int_arr;
+    }
+
+    int bbox_index = 0;
+    for (int bbox_i=0; bbox_i<GRID_SIZE_BOT; bbox_i++) {
+    for (int bbox_j=0; bbox_j<GRID_SIZE_BOT; bbox_j++) {
+    for (int bbox_k=0; bbox_k<GRID_SIZE_BOT; bbox_k++) {
+        vec3 ijk = vec3(bbox_i, bbox_j, bbox_k);
+        vec3 bbox_origin = accel_struct.origin + ijk * bbox_size;
+
+        // if ((accel_struct.subgrids[blas_index].mask & (1 << bbox_index)) != uvec2(0,0)) continue;
+
+        if (tri_aabb_intersect(bbox_precompute, bbox_origin)) {
+            BufferView buffer_view = accel_struct.grid.buffer_views[bbox_index];
+
+            // For each triangle, compute whether it could occlude the linelight, if so, update intervals
+            for (int i = buffer_view.offset; i < buffer_view.offset+buffer_view.size; i += 3) {
+                // if (int_arr.size == 0) early_out = true; // Early stop
+                // if (early_out) break;
+
+                vec3 v0 = to_world(verts[acceleration_indices[i]].pos);
+                vec3 v1 = to_world(verts[acceleration_indices[i+1]].pos);
+                vec3 v2 = to_world(verts[acceleration_indices[i+2]].pos);
+
+                // vec3 tri_normal_0 = to_world(verts[acceleration_indices[i]].normal);
+                // vec3 tri_normal_1 = to_world(verts[acceleration_indices[i+1]].normal);
+                // vec3 tri_normal_2 = to_world(verts[acceleration_indices[i+2]].normal);
+                // vec3 mean_vertex_norm = tri_normal_0 + tri_normal_1 + tri_normal_2;
+                // vec3 face_normal = normalize(cross(v1-v0, v2-v0));
+
+
+                // vec3 face_normal = verts[acceleration_indices[i]].normal;
+                // float beta = 1.0 + dot(n, face_normal);
+
+                // // if (dot(mean_vertex_norm, face_normal) < 0.0) face_normal = -face_normal;
+                // if (alpha > beta) continue;
+
+                // float r_0 = dot(n, v0 - pos);
+                // float r_1 = dot(n, v1 - pos);
+                // float r_2 = dot(n, v2 - pos);
+
+                // if (r_0 < 0.0 && r_1 < 0.0 && r_2 < 0.0) {
+                //     continue;
+                // }
+
+                vec2 interval;
+                if (tri_tri_intersect_custom(l0,l1,pos+0.001*n, v0,v1,v2, interval)) {
+                    occlude_intervals(int_arr, interval);
+                }
+            }
+        }
+
+        bbox_index++;
+    }}}
+
+    return int_arr;
+}
+
+
+
 void main() {
-    float I = 5.0;
+    float I = 10.0;
     vec3 ambient = vec3(0.1);
 
     vec3 pos = to_world(inPos);
@@ -318,104 +399,36 @@ void main() {
     vec3 l1 = to_world(l1_ubo);
     vec3 L = l1 - l0;
 
-    // vec3 l0_dir = normalize(l0 - pos);
-    // vec3 l1_dir = normalize(l1 - pos);
-    // float dot_0 = dot(n, l0_dir);
-    // float dot_1 = dot(n, l1_dir);
-    // float alpha = max(0.0, min(dot_0, dot_1));
 
-    // Precompute AABB grid intermediate values for fast intersection
-    vec3 blas_size = accel_struct.size / float(GRID_SIZE_TOP);
-    vec3 bbox_size = blas_size / float(GRID_SIZE_BOT);
-    PrecomputeVals blas_precompute = tri_aabb_precompute(l0_ubo.xyz, l1_ubo.xyz, inPos, blas_size);
-    PrecomputeVals bbox_precompute = tri_aabb_precompute(l0_ubo.xyz, l1_ubo.xyz, inPos, bbox_size);
-
-    // Initialize interval array
-    IntervalArray int_arr;
-    int_arr.size = 0;
-    int_arr.operations = 0;
-    int_arr.highest_int_count = 0;
-    int_arr.hit_max = false;
-    add_interval(int_arr, vec2(0.0,1.0));
-
-    // For each bounding box, test first if it intersects the light-triangle at all
-    // bool early_out = false;
-    int blas_index = 0;
-    for (int blas_i=0; blas_i<GRID_SIZE_TOP; blas_i++) {
-    for (int blas_j=0; blas_j<GRID_SIZE_TOP; blas_j++) {
-    for (int blas_k=0; blas_k<GRID_SIZE_TOP; blas_k++) {
-        vec3 ijk = vec3(blas_i, blas_j, blas_k);
-        vec3 blas_origin = accel_struct.origin + ijk * blas_size;
-
-        if (tri_aabb_intersect(blas_precompute, blas_origin)) {
-            // if (early_out) break;
-
-            int bbox_index = 0;
-            for (int bbox_i=0; bbox_i<GRID_SIZE_BOT; bbox_i++) {
-            for (int bbox_j=0; bbox_j<GRID_SIZE_BOT; bbox_j++) {
-            for (int bbox_k=0; bbox_k<GRID_SIZE_BOT; bbox_k++) {
-                vec3 ijk = vec3(bbox_i, bbox_j, bbox_k);
-                vec3 bbox_origin = blas_origin + ijk * bbox_size;
-
-                if (tri_aabb_intersect(bbox_precompute, bbox_origin)) {
-
-                    BufferView buffer_view = accel_struct.subgrids[blas_index].buffer_views[bbox_index];
-                    
-                    // For each triangle, compute whether it could occlude the linelight, if so, update intervals
-                    for (int i = buffer_view.offset; i < buffer_view.offset+buffer_view.size; i += 3) {
-                        // if (int_arr.size == 0) early_out = true; // Early stop
-                        // if (early_out) break;
-
-                        vec3 v0 = to_world(verts[acceleration_indices[i]].pos);
-                        vec3 v1 = to_world(verts[acceleration_indices[i+1]].pos);
-                        vec3 v2 = to_world(verts[acceleration_indices[i+2]].pos);
-
-                        // vec3 face_normal = normalize(to_world(verts[acceleration_indices[i]].normal));
-                        // float beta = 1.0 + dot(n, face_normal);
-                        // if (alpha > beta) continue;
-
-                        vec2 interval;
-                        if (tri_tri_intersect_custom(l0,l1,pos+0.001*n, v0,v1,v2, interval)) {
-                            occlude_intervals(int_arr, interval);
-                        }
-                    }
-                }
-
-                bbox_index++;
-            }}}
+    // A possible optimization, but didn't seem to confer any measurable benefit
+    // If line-light intersects plane of the triangle, clamp it
+    float clamp_t = dot(pos - l0, n) / dot(L, n);
+    if (clamp_t >= 0.0 && clamp_t <= 1.0) {
+        if (dot(l0 - pos, n) > 0.0) {
+            I = clamp_t * I;
+            l1 = clamp_t * L + l0;
+        } else {
+            I = (1.0 - clamp_t) * I;
+            l0 = clamp_t * L + l0;
         }
-        blas_index++;
-    }}}
+        L = l1 - l0;
+    }
 
-    // float irr = 0.0;
-    // for (int i = 0; i < int_arr.size; i++) {
-    //     vec2 interval = int_arr.data[i];
-    //     vec3 p0 = L * interval.x + l0;
-    //     vec3 p1 = L * interval.y + l0;
-    //     float fraction_of_light = I * (interval.y - interval.x);
-    //     irr += sample_line_light_analytic(pos, n, p0, p1, fraction_of_light);
-    // }
-    // int max_ops = 40;
+    // IntervalArray int_arr = intersect_scene_brute(pos, n, l0, l1);
+    IntervalArray int_arr = intersect_scene_grid(pos, n, l0, l1);
 
-
-    // vec3 color;
-    // if (int_arr.hit_max) {
-    //     color = vec3(0.0,1.0,0.0);
-    // } else {
-    //     // color = heatmap(float(int_arr.operations) / float(max_ops));
-    //     color = heatmap(float(int_arr.highest_int_count) / float(ARR_MAX));
-    // }
-    
-    vec3 color = vec3(0.5);
-    if (int_arr.size == 0) color = vec3(0.2);
-    if (int_arr.size == 1 && int_arr.data[0] == vec2(0.0,1.0)) color = vec3(1.0);
-
-
-
-
-    // vec3 color = 1.0 - exp(-irr * vec3(1.0) - ambient);
+    float irr = 0.0;
+    for (int i = 0; i < int_arr.size; i++) {
+        vec2 interval = int_arr.data[i];
+        vec3 p0 = L * interval.x + l0;
+        vec3 p1 = L * interval.y + l0;
+        float fraction_of_light = I * (interval.y - interval.x);
+        irr += sample_line_light_analytic(pos, n, p0, p1, fraction_of_light);
+    }
+    // vec3 color = heatmap(int_arr.size / 4.0 - 1.0);
+    vec3 color = 1.0 - exp(-irr * vec3(1.0) - ambient);
 
     // Fix color banding by adding noise: https://pixelmager.github.io/linelight/banding.html
-    // color += noise() / 255.0;
+    color += noise() / 255.0;
     outColor = vec4(color,1.0);
 }

@@ -27,11 +27,12 @@ fn main() {
     let _client = tracy_client::Client::start();
     let _span = span!("init");
 
-    let analytic_shader = linelight_vk::make_shaders("shaders/simple_shader.vert", "shaders/analytic.frag", true);
+    let analytic_shader = linelight_vk::make_shaders("shaders/simple_shader.vert", "shaders/analytic_grid.frag", true);
     let stochastic_shader = linelight_vk::make_shaders("shaders/simple_shader.vert", "shaders/stochastic.frag", true);
     let debug_shader = linelight_vk::make_shaders("shaders/simple_shader.vert", "shaders/debug.frag", true);
 
-    let shaders = vec![analytic_shader, stochastic_shader, debug_shader];
+    // let shaders = vec![analytic_shader, stochastic_shader, debug_shader];
+    let shaders = vec![analytic_shader];
     let debug_overlay_shaders = linelight_vk::make_shaders("shaders/debugger.vert", "shaders/debugger.frag", false);
     let ubo_bindings = linelight_vk::make_ubo_bindings();
     
@@ -41,7 +42,7 @@ fn main() {
 
 
     // let scene = Scene::dragon(64);
-    let scene = Scene::dragon_small_light(16);
+    let scene = Scene::dragon_small_light(32);
     // let scene = Scene::sponza(2);
     // let scene = Scene::clipping_test();
     // let scene = Scene::edge_case_check();
@@ -52,7 +53,7 @@ fn main() {
 
     let mut inputs = Inputs::default();
     // Temporary: To measure stochastic shader more conveniently:
-    inputs.selected_shader = 1; // 0 = analytic, 1 = stochastic
+    inputs.selected_shader = 0; // 0 = analytic, 1 = stochastic
 
 
 
@@ -73,14 +74,16 @@ fn main() {
 
     let mut current_frame = 0;
     let mut timer = std::time::Instant::now();
-
-    unsafe {
-        write_struct_to_buffer(
-            app.debug_buffer
-                .memory_ptr
-                .expect("Uniform buffer not mapped!"),
-            debug_overlay.as_ref() as *const DebugOverlay,
-        );
+    
+    if ENABLE_DEBUG {
+        unsafe {
+            write_struct_to_buffer(
+                app.debug_buffer
+                    .memory_ptr
+                    .expect("Uniform buffer not mapped!"),
+                debug_overlay.as_ref() as *const DebugOverlay,
+            );
+        }
     }
 
     let mut just_took_screenshot = false; // Helper variable to ensure only one is taken per keypress
@@ -92,8 +95,8 @@ fn main() {
     // camera.eye = vec3(0.0, -4.0, 5.0);
     // camera.eye = vec3(0.0, -6.0, 0.0);
     // camera.rotate(std::f32::consts::FRAC_PI_2, 0.0);
-    // camera.eye = vec3(1.9490113, -2.0318327, -2.0184014);
-    // camera.rotate(0.43671742, -3.228007);
+    camera.eye = vec3(1.9490113, -2.0318327, -2.0184014);
+    camera.rotate(0.43671742, -3.228007);
     // camera.eye = vec3(0.62512153, -1.386372, -0.9759541);
     // camera.rotate(0.41871738, -2.8680065);
 
@@ -105,8 +108,8 @@ fn main() {
     // camera.rotate(0.36471802, -1.0740021);
 
     // Settings for da dragon
-    camera.eye = vec3(-1.3054297, -2.1971848, -4.514163);
-    camera.rotate(0.3527179, -2.8560042);
+    // camera.eye = vec3(-1.3054297, -2.1971848, -4.514163);
+    // camera.rotate(0.3527179, -2.8560042);
 
     let model_pos = vec3(0.0, 0.0, 0.0);
     let model_scale = 0.5;
@@ -581,22 +584,22 @@ fn update_debug_overlay(
         // } else {
         //     debug_overlay.tri_e1 = LineSegment(point, l1);
         // }
-        use acceleration::GRID_SIZE;
+        use acceleration::{GRID_SIZE_TOP, GRID_SIZE_BOT};
 
         debug_overlay.light_triangle[1] = LineSegment(l0, point);
         debug_overlay.light_triangle[2] = LineSegment(l1, point);
         debug_overlay.boxes = [WireframeBox::default(); MAX_DEBUG_BOXES];
 
-        let blas_size = accel_struct.size / (GRID_SIZE as f32);
-        let bbox_size = blas_size / (GRID_SIZE as f32);
+        let blas_size = accel_struct.size / (GRID_SIZE_TOP as f32);
+        let bbox_size = blas_size / (GRID_SIZE_BOT as f32);
 
         let pc_blas = tri_aabb_precompute(l0, l1, point, blas_size);
         let pc_bbox = tri_aabb_precompute(l0, l1, point, bbox_size);
 
         let mut hit_boxes = 0;
-        for i in 0..GRID_SIZE {
-        for j in 0..GRID_SIZE {
-        for k in 0..GRID_SIZE {
+        for i in 0..GRID_SIZE_TOP {
+        for j in 0..GRID_SIZE_TOP {
+        for k in 0..GRID_SIZE_TOP {
             let ijk = vec3(i as f32, j as f32, k as f32);
             let blas_origin = accel_struct.origin + ijk * blas_size;
 
@@ -609,9 +612,9 @@ fn update_debug_overlay(
             //     hit_boxes += 1;
             // }
 
-            for ii in 0..GRID_SIZE {
-            for jj in 0..GRID_SIZE {
-            for kk in 0..GRID_SIZE {
+            for ii in 0..GRID_SIZE_BOT {
+            for jj in 0..GRID_SIZE_BOT {
+            for kk in 0..GRID_SIZE_BOT {
                 let ijk = vec3(ii as f32, jj as f32, kk as f32);
                 let bbox_origin = blas_origin + ijk * bbox_size;
 

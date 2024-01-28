@@ -32,8 +32,10 @@ vec3 to_world(vec4 v) {
     return (model*v).xyz;
 }
 
-const int GRID_SIZE = 4;
-const int BBOX_COUNT = GRID_SIZE*GRID_SIZE*GRID_SIZE;
+const int GRID_SIZE_TOP = 4;
+const int GRID_SIZE_BOT = 10;
+const int BBOX_COUNT_TOP = GRID_SIZE_TOP*GRID_SIZE_TOP*GRID_SIZE_TOP;
+const int BBOX_COUNT_BOT = GRID_SIZE_BOT*GRID_SIZE_BOT*GRID_SIZE_BOT;
 
 struct BufferView {
     int offset;
@@ -41,18 +43,18 @@ struct BufferView {
 };
 struct BLAS {
     // uvec2 mask;
-    BufferView buffer_views[BBOX_COUNT];
+    BufferView buffer_views[BBOX_COUNT_BOT];
 };
 struct TLAS {
     vec3 size;
     vec3 origin;
-    BLAS subgrids[BBOX_COUNT];
+    BLAS subgrids[BBOX_COUNT_TOP];
 };
-
-layout(scalar, binding = 1) uniform accelerationStructure {
-    TLAS accel_struct;
+struct GridAccel {
+    vec3 size;
+    vec3 origin;
+    BLAS grid;
 };
-
 
 // Simple heatmap from 0.0 to +1.0
 vec3 heatmap(float t) {
