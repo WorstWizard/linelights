@@ -335,13 +335,15 @@ IntervalArray intersect_scene_grid(vec3 pos, vec3 n, vec3 l0, vec3 l1) {
     for (int bbox_i=0; bbox_i<GRID_SIZE_BOT; bbox_i++) {
     for (int bbox_j=0; bbox_j<GRID_SIZE_BOT; bbox_j++) {
     for (int bbox_k=0; bbox_k<GRID_SIZE_BOT; bbox_k++) {
+        BufferView buffer_view = accel_struct.grid.buffer_views[bbox_index];
+        bbox_index++;
+        if (buffer_view.size == 0) continue;
+        // if ((accel_struct.subgrids[blas_index].mask & (1 << bbox_index)) != uvec2(0,0)) continue;
+
         vec3 ijk = vec3(bbox_i, bbox_j, bbox_k);
         vec3 bbox_origin = accel_struct.origin + ijk * bbox_size;
 
-        // if ((accel_struct.subgrids[blas_index].mask & (1 << bbox_index)) != uvec2(0,0)) continue;
-
         if (tri_aabb_intersect(bbox_precompute, bbox_origin)) {
-            BufferView buffer_view = accel_struct.grid.buffer_views[bbox_index];
 
             // For each triangle, compute whether it could occlude the linelight, if so, update intervals
             for (int i = buffer_view.offset; i < buffer_view.offset+buffer_view.size; i += 3) {
@@ -379,8 +381,6 @@ IntervalArray intersect_scene_grid(vec3 pos, vec3 n, vec3 l0, vec3 l1) {
                 }
             }
         }
-
-        bbox_index++;
     }}}
 
     return int_arr;
