@@ -106,7 +106,7 @@ vec2 compute_intervals_custom(
     dp = abs(dp);
     float di0 = sign_of_dp * dist_to_line_2d_unnormalized(l0.xz, l1.xz, isect0.xz);
     float di1 = sign_of_dp * dist_to_line_2d_unnormalized(l0.xz, l1.xz, isect1.xz);
-    if (di0 < 0.0 || di1 < 0.0 || (di0 > dp && di1 > dp)) return vec2(INF, INF); // arbitrary non-occluding interval
+    if ((di0 < 0.0 && di1 < 0.0) || (di0 > dp && di1 > dp)) return vec2(INF, INF); // arbitrary non-occluding interval
 
     // Project intersections onto line t*(l1-l0) + l0 by computation of t-values
     float t0, t1;
@@ -119,10 +119,10 @@ vec2 compute_intervals_custom(
     }
 
     // If one intersection is further away from the line than the sampled point,
-    // its corresponding t-value should be at infinity
+    // or is "above" the linelight in 2D, its corresponding t-value should be at infinity
     // Let t1 correspond to the point closer than pos, t0 the more distant point
     // Ergo, t0 will be put at +/- infinity, while t1 is kept
-    if (di1 >= dp) t1 = t0;
+    if (di1 >= dp || di1 < 0.0) t1 = t0;
     
     bool intersects_left = linesegments_intersect(l0.xz,pos.xz,isect0.xz,isect1.xz);
     bool intersects_right = linesegments_intersect(l1.xz,pos.xz,isect0.xz,isect1.xz);
@@ -358,12 +358,13 @@ IntervalArray intersect_scene_grid(vec3 pos, vec3 n, vec3 l0, vec3 l1) {
                 // vec3 tri_normal_1 = to_world(verts[acceleration_indices[i+1]].normal);
                 // vec3 tri_normal_2 = to_world(verts[acceleration_indices[i+2]].normal);
                 // vec3 mean_vertex_norm = tri_normal_0 + tri_normal_1 + tri_normal_2;
-                // vec3 face_normal = normalize(cross(v1-v0, v2-v0));
+                // if (dot(mean_vertex_norm, l0_dir) < 0.0 && dot(mean_vertex_norm, l1_dir) < 0.0) continue;
 
 
-                // vec3 face_normal = verts[acceleration_indices[i]].normal;
+                // vec3 face_normal = to_world(verts[acceleration_indices[i]].normal);
+                // if (dot(face_normal, l0_dir) < 0.0 && dot(face_normal, l1_dir) < 0.0) continue;
+
                 // float beta = 1.0 + dot(n, face_normal);
-
                 // // if (dot(mean_vertex_norm, face_normal) < 0.0) face_normal = -face_normal;
                 // if (alpha > beta) continue;
 

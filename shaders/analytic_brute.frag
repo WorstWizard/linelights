@@ -102,7 +102,7 @@ vec2 compute_intervals_custom(
     dp = abs(dp);
     float di0 = sign_of_dp * dist_to_line_2d_unnormalized(l0.xz, l1.xz, isect0.xz);
     float di1 = sign_of_dp * dist_to_line_2d_unnormalized(l0.xz, l1.xz, isect1.xz);
-    if (di0 < 0.0 || di1 < 0.0 || (di0 > dp && di1 > dp)) return vec2(INF, INF); // arbitrary non-occluding interval
+    if ((di0 < 0.0 && di1 < 0.0) || (di0 > dp && di1 > dp)) return vec2(INF, INF); // arbitrary non-occluding interval
 
     // Project intersections onto line t*(l1-l0) + l0 by computation of t-values
     float t0, t1;
@@ -115,10 +115,10 @@ vec2 compute_intervals_custom(
     }
 
     // If one intersection is further away from the line than the sampled point,
-    // its corresponding t-value should be at infinity
+    // or is "above" the linelight in 2D, its corresponding t-value should be at infinity
     // Let t1 correspond to the point closer than pos, t0 the more distant point
     // Ergo, t0 will be put at +/- infinity, while t1 is kept
-    if (di1 >= dp) t1 = t0;
+    if (di1 >= dp || di1 < 0.0) t1 = t0;
     
     bool intersects_left = linesegments_intersect(l0.xz,pos.xz,isect0.xz,isect1.xz);
     bool intersects_right = linesegments_intersect(l1.xz,pos.xz,isect0.xz,isect1.xz);
